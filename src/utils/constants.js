@@ -2,7 +2,7 @@ import { env } from '~/config/environment'
 
 export const WHITE_LIST_DOMAINS = [
   'http://localhost:5173',
-  'https://trello-web-remake.vercel.app/'
+  'https://trello-web-remake.vercel.app'
   // còn nhiều domain khác
 ]
 
