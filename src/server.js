@@ -20,7 +20,7 @@ let io
 
 const START_SERVER = () => {
   const app = express()
-
+  const port = process.env.PORT || 4000
   app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store')
     next()
@@ -52,9 +52,9 @@ const START_SERVER = () => {
   })
 
   if (env.BUILD_MODE === 'production') {
-    server.listen(process.env.PORT || 8210, () => {
+    server.listen(port, () => {
       // eslint-disable-next-line no-console
-      console.log(`${env.AUTHOR} Server running at port ${process.env.PORT}`)
+      console.log(`${env.AUTHOR} Server running at port ${port}`)
     })
   }
   else {
