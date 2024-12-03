@@ -1,4 +1,5 @@
 /* eslint-disable no-useless-catch */
+import { StatusCodes } from 'http-status-codes'
 import { env } from '~/config/environment'
 import { boardModel } from '~/models/boardModel'
 import { cardModel } from '~/models/cardModel'
@@ -7,6 +8,7 @@ import { dueDateNotificationSystem, flagDueDateModel } from '~/models/flagDueDat
 import { userModel } from '~/models/userModel'
 import { BrevoProvider } from '~/providers/BrevoProvider'
 import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
+import ApiError from '~/utils/ApiError'
 import { WEBSITE_DOMAIN } from '~/utils/constants'
 import { slugify } from '~/utils/formatter'
 
@@ -42,8 +44,12 @@ const getDetails = async (userId, cardId) => {
   }
 }
 
-const moveCardToDifferentBoard = async (cardId, reqBody) => {
+const moveCardToDifferentBoard = async (cardId, reqBody, userId) => {
   try {
+    const isAdmin = await boardModel.isAdmin(userId, reqBody.currentBoardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You are not allowed to move this card')
+    }
     const { currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition } = reqBody
     const card = await cardModel.moveCardToDifferentBoard(cardId, currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition)
     return card
@@ -65,11 +71,15 @@ const copyCard = async (cardId, reqBody) => {
   }
 }
 
-const deleteCard = async (cardId) => {
+const deleteCard = async (cardId, userId) => {
   try {
     const card = await cardModel.findOneById(cardId)
     if (!card) {
       throw new Error('Card not found')
+    }
+    const isAdmin = await boardModel.isAdmin(userId, card.boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You are not allowed to delete this card')
     }
     // Xoá card
     await cardModel.deleteCardById(cardId)

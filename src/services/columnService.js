@@ -44,11 +44,16 @@ const update = async (columnId, reqBody) => {
   }
 }
 
-const deleteColumn = async (columnId) => {
+const deleteColumn = async (columnId, userId) => {
   try {
     const targetColumn = await columnModel.findOneById(columnId)
     if (!targetColumn) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Column not found')
+    }
+
+    const isAdmin = await boardModel.isAdmin(userId, targetColumn.boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to delete this column')
     }
     // xóa column
     await columnModel.deleteColumnById(columnId)
@@ -63,9 +68,13 @@ const deleteColumn = async (columnId) => {
   }
 }
 
-const moveColumnToDifferentBoard = async (columnId, reqBody) => {
+const moveColumnToDifferentBoard = async (columnId, reqBody, userId) => {
   try {
     const { currentBoardId, newBoardId, newPosition } = reqBody
+  const isAdmin = await boardModel.isAdmin(userId, currentBoardId)
+  if (!isAdmin) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to move this column')
+  }
     const column = await columnModel.moveColumnToDifferentBoard(columnId, currentBoardId, newBoardId, newPosition)
     return column
   } catch (error) {

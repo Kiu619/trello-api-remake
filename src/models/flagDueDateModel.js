@@ -44,6 +44,7 @@ const checkDueDatesEveryMinute = async () => {
     dueDate: { $eq: localDate }
   }).toArray()
 
+  if (flaggedCards.length === 0) return
   for (const card of flaggedCards) {
     if (currentTime >= card.dueDateTime && !card.isOverdueNotified) {
       // Fetch memberIds from the cards collection using cardId
@@ -105,7 +106,14 @@ const checkNewDueDate = async (cardId, dueDate) => {
   // Get the current date in local timezone
   const currentDate = new Date()
   const localDate = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0]
-  const dueDateOnly = new Date(dueDate.dueDate).toISOString().split('T')[0]
+  const dueDateOnly = new Date(dueDate?.dueDate).toISOString().split('T')[0]
+
+  // Get the current time
+  const currentTime = currentDate.toTimeString().split(' ')[0].slice(0, 5)
+
+  if (dueDateOnly === '1970-01-01') return
+  if (currentTime >= dueDate.dueDateTime) return
+  if (dueDate.dueDateTime === null) return
 
   if (dueDateOnly === localDate) {
     await db.collection(FLAG_COLLECTION_NAME).insertOne({

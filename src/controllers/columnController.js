@@ -25,8 +25,9 @@ const update = async (req, res, next) => {
 
 const deleteColumn = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const columnId = req.params.id
-    const result = await columnService.deleteColumn(columnId)
+    const result = await columnService.deleteColumn(columnId, userId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)
@@ -35,8 +36,9 @@ const deleteColumn = async (req, res, next) => {
 
 const moveColumnToDifferentBoard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const columnId = req.params.id
-    const moveResult = await columnService.moveColumnToDifferentBoard(columnId, req.body)
+    const moveResult = await columnService.moveColumnToDifferentBoard(columnId, req.body, userId)
     res.status(StatusCodes.OK).json(moveResult)
   } catch (error) {
     next(error)

@@ -36,8 +36,9 @@ const update = async (req, res, next) => {
 
 const deleteBoard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const boardId = req.params.id
-    const result = await boardService.deleteBoard(boardId)
+    const result = await boardService.deleteBoard(boardId, userId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)
@@ -133,9 +134,10 @@ const leaveBoard = async (req, res, next) => {
 
 const openClosedBoard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const boardId = req.params.id
     const isClosed = req.body.isClosed
-    const result = await boardService.openCloseBoard(boardId, isClosed)
+    const result = await boardService.openCloseBoard(boardId, isClosed, userId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)
@@ -156,9 +158,10 @@ const copyBoard = async (req, res, next) => {
 
 const removeMembers = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const boardId = req.params.id
     const userIds = req.body
-    const result = await boardService.removeMembers(boardId, userIds)
+    const result = await boardService.removeMembers(boardId, userIds, userId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)

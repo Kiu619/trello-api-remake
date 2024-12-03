@@ -40,7 +40,17 @@ const CARD_COLLECTION_SCHEMA = Joi.object({
     Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
   ).default([]),
 
-  dueDate: DUEDATE_SCHEMA.default({}),
+  dueDate: DUEDATE_SCHEMA.default({
+    title: '',
+    startDate: null,
+    startTime: null,
+    dueDate: null,
+    dueDateTime: null,
+    isComplete: false,
+    dayBeforeToRemind: 0,
+    isRemind: false,
+    isOverdueNotified: false
+  }),
 
 
   attachments: Joi.array().items(ATTACHMENT_SCHEMA).default([]),
@@ -499,6 +509,7 @@ const copyCard = async (cardId, currentBoardId, currentColumnId, newBoardId, new
     const newCarded = await findOneById(result.insertedId.toString())
     
     // If keepingItems includes dueDate, call checkNewDueDate
+
     if (keepingItems.includes('dueDate')) {
       await flagDueDateModel.checkNewDueDate(newCarded._id.toString(), newCarded.dueDate)
     }

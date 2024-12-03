@@ -119,8 +119,13 @@ const update = async (boardId, reqBody) => {
   }
 }
 
-const deleteBoard = async (boardId) => {
+const deleteBoard = async (boardId, userId) => {
   try {
+
+    const isAdmin = await boardModel.isAdmin(userId, boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to delete this board')
+    }
     const targetBoard = await boardModel.findOneById(boardId)
     if (!targetBoard) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Board not found')
@@ -252,6 +257,11 @@ const inviteUser = async (reqBody, inviterId) => {
 
 const addBoardAdmin = async (boardId, userId) => {
   try {
+    const isAdmin = await boardModel.isAdmin(userId, boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to add admin to this board')
+    }
+
     const user = await userModel.findOneById(userId)
 
     if (!user) {
@@ -270,6 +280,10 @@ const addBoardAdmin = async (boardId, userId) => {
 
 const removeBoardAdmin = async (boardId, userId) => {
   try {
+    const isAdmin = await boardModel.isAdmin(userId, boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to add admin to this board')
+    }
     const user = await userModel.findOneById(userId)
 
     if (!user) {
@@ -286,8 +300,12 @@ const removeBoardAdmin = async (boardId, userId) => {
   }
 }
 
-const removeMembers = async (boardId, userIds) => {
+const removeMembers = async (boardId, userIds, userId) => {
   try {
+    const isAdmin = await boardModel.isAdmin(userId, boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to add admin to this board')
+    }
     // Remove each user from the board and the cards
     for (const userId of userIds) {
       // Remove user from the board
@@ -333,8 +351,12 @@ const leaveBoard = async (boardId, userId) => {
   }
 }
 
-const openCloseBoard = async (boardId, isClosed) => {
+const openCloseBoard = async (boardId, isClosed, userId) => {
   try {
+    const isAdmin = await boardModel.isAdmin(userId, boardId)
+    if (!isAdmin) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to add admin to this board')
+    }
     const updatedBoard = await boardModel.update(boardId, {
       isClosed: isClosed
     })

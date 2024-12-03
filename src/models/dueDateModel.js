@@ -6,10 +6,10 @@ import { CARD_COLLECTION_NAME } from '~/models/cardModel'
 
 export const DUEDATE_SCHEMA = Joi.object({
   title: Joi.string().optional(),
-  startDate: Joi.date().allow(null),
+  // startDate: Joi.date().allow(null),
   startTime: Joi.string().allow(null),
-  dueDate: Joi.date().required(),
-  dueDateTime: Joi.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  // dueDate: Joi.date().required(),
+  dueDateTime: Joi.string().default(null),
   isComplete: Joi.boolean().default(false), // New field for completion status,
   dayBeforeToRemind: Joi.number().default(0), // New field for day before to remind
   isRemind: Joi.boolean().default(false), // New field for remind status

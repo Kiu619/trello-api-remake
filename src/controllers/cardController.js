@@ -49,8 +49,9 @@ const getDetails = async (req, res, next) => {
 
 const moveCardToDifferentBoard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
-    const moveResult = await cardService.moveCardToDifferentBoard(cardId, req.body)
+    const moveResult = await cardService.moveCardToDifferentBoard(cardId, req.body, userId)
     res.status(StatusCodes.OK).json(moveResult)
   } catch (error) {
     next(error)
@@ -69,8 +70,9 @@ const copyCard = async (req, res, next) => {
 
 const deleteCard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
-    const deleteResult = await cardService.deleteCard(cardId)
+    const deleteResult = await cardService.deleteCard(cardId, userId)
     res.status(StatusCodes.OK).json(deleteResult)
   } catch (error) {
     next(error)

@@ -349,6 +349,18 @@ const getBoards = async (userId, page, itemsPerPage, queryFilter, sortConfig) =>
   }
 }
 
+const isAdmin = async (userId, boardId) => {
+  try {
+    const board = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({
+      _id: new ObjectId(boardId),
+      ownerIds: { $all: [new ObjectId(userId)] }
+    })
+    return board
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const boardModel = {
   BOARD_COLLECTION_NAME,
   BOARD_COLLECTION_SCHEMA,
@@ -356,5 +368,5 @@ export const boardModel = {
   pushColumnOrderIds, deleteBoardById,
   update, pullColumnOrderIds,
   getBoards, pushMemberIds, pullMemberIds,
-  pushOwnerIds, pullOwnerIds
+  pushOwnerIds, pullOwnerIds, isAdmin
 }
