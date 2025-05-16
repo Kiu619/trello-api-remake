@@ -1,14 +1,13 @@
 import Joi from 'joi'
-import { EMAIL_RULE, EMAIL_RULE_MESSAGE, OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators'
 import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
 import { CARD_MEMBER_ACTIONS } from '~/utils/constants'
-import { CHECKLIST_SCHEMA, checkListInCardModel } from './checkListInCardModel'
-import { addChecklistInCard, updateChecklistInCard, deleteChecklistInCard } from './checkListInCardModel'
+import { OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators'
 import { attachmantInCardModel, ATTACHMENT_SCHEMA } from './attachmentModel'
-import { DUEDATE_SCHEMA } from './dueDateModel'
-import { COLUMN_COLLECTION_NAME } from './columnModel'
 import { BOARD_COLLECTION_NAME } from './boardModel'
+import { CHECKLIST_SCHEMA, checkListInCardModel } from './checkListInCardModel'
+import { COLUMN_COLLECTION_NAME } from './columnModel'
+import { DUEDATE_SCHEMA } from './dueDateModel'
 
 // Define Comment Schema
 const COMMENT_SCHEMA = Joi.object({
@@ -99,6 +98,24 @@ const getDetails = async (userId, cardId) => {
 
     return result[0]
 
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const findOneByTitle = async (columnId, cardTitle) => {
+  try {
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ columnId: new ObjectId(columnId), title: cardTitle })
+    return card
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getPositionInColumn = async (cardId, columnId) => {
+  try {
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId), columnId: new ObjectId(columnId) })
+    return card.positionInColumn
   } catch (error) {
     throw new Error(error)
   }
@@ -538,7 +555,7 @@ const deleteCardsByBoardId = async (boardId) => {
 export const cardModel = {
   CARD_COLLECTION_NAME,
   CARD_COLLECTION_SCHEMA,
-  createNew, getDetails,
+  createNew, getDetails, findOneByTitle,
   findOneById, update, removeMemberFromCard, deleteAllCardByColumnId,
   unshiftNewComment, updateComment, deleteComment, updateMember, updateChecklist, updateChecklistItem,
   addAttachment, editAttachment, updateLocation, moveCardToDifferentBoard,
