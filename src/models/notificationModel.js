@@ -1,12 +1,11 @@
+import { StatusCodes } from 'http-status-codes'
 import Joi from 'joi'
 import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
+import ApiError from '~/utils/ApiError'
 import { BOARD_INVITATION_STATUS } from '~/utils/constants'
 import { OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators'
-import { INVITATION_COLLECTION_SCHEMA } from './invitationModel'
 import { boardModel } from './boardModel'
-import { StatusCodes } from 'http-status-codes'
-import ApiError from '~/utils/ApiError'
 
 const INVITE_NOTIFICATION_SCHEMA = Joi.object({
   boardId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -95,6 +94,7 @@ const NOTIFICATION_COLLECTION_SCHEMA = Joi.object({
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
   _destroy: Joi.boolean().default(false),
+  expireAt: Joi.date().timestamp('javascript').default(() => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
 
   // Additional fields based on the type of the notification
   details: Joi.alternatives().conditional('type', {
@@ -114,7 +114,8 @@ const createNew = async (data) => {
     const validData = await validateBeforeCreate(data)
     const newNotificationToAdd = {
       ...validData,
-      userId: new ObjectId(validData.userId)
+      userId: new ObjectId(validData.userId),
+      expireAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
     }
 
     // // Nếu đã gửi invite rồi thì không tạo mới nữa ( trừ khi bị reject )

@@ -16,7 +16,7 @@ const createNew = async (reqBody) => {
     const getNewColumn = await columnModel.findOneById(createColumn.insertedId)
 
     if (getNewColumn) {
-      // Xử lý cấu trúc data trước khi trả dữ liệu về 
+      // Xử lý cấu trúc data trước khi trả dữ liệu về
       getNewColumn.cards = []
 
       // Cập nhật mảng columnOrderIds của board
@@ -30,7 +30,23 @@ const createNew = async (reqBody) => {
   }
 }
 
+const getDetailsByTitle = async (boardId, title) => {
+  try {
+    const column = await columnModel.findOneByTitle(boardId, title)
+    return column
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 
+const getCardPositionInColumn = async (columnId, cardId) => {
+  try {
+    const cardPosition = await columnModel.getCardPositionInColumn(columnId, cardId)
+    return cardPosition
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 
 const update = async (columnId, reqBody) => {
   try {
@@ -96,6 +112,38 @@ const moveAllCardsToAnotherColumn = async (columnId, newColumnId) => {
   }
 }
 
+const closeColumn = async (columnId, isClosed = true) => {
+  try {
+    const updateData = {
+      isClosed: isClosed,
+      updatedAt: Date.now()
+    }
+    
+    const updatedColumn = await columnModel.update(columnId, updateData)
+    return updatedColumn
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const closeAllColumns = async (boardId, isClosed = true) => {
+  try {
+    const result = await columnModel.openCloseAllColumn(boardId, isClosed)
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const columnService = {
-  createNew, update, deleteColumn, moveColumnToDifferentBoard, copyColumn, moveAllCardsToAnotherColumn
+  createNew,
+  getDetailsByTitle,
+  getCardPositionInColumn,
+  update,
+  deleteColumn,
+  moveColumnToDifferentBoard,
+  copyColumn,
+  moveAllCardsToAnotherColumn,
+  closeColumn,
+  closeAllColumns
 }

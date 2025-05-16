@@ -3,6 +3,7 @@ import exitHook from 'async-exit-hook'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
+import helmet from 'helmet'
 import { env } from '~/config/environment'
 import { CLOSE_DB, CONNECT_DB } from '~/config/mongodb'
 import { errorHandlingMiddleware } from '~/middlewares/errorHandlingMiddleware'
@@ -15,6 +16,7 @@ import { activeCardUpdatedSocket } from './sockets/activeCardUpdatedSocket'
 import { batchSocket } from './sockets/batchSocket'
 import { copyCardInSameBoardSocket } from './sockets/copyCardInSameBoardSocket'
 import { fetchNotificationsSocket } from './sockets/fetchNotificationsSocket'
+import { setupSocketIo } from './services/chatBotService'
 
 
 const START_SERVER = () => {
@@ -26,6 +28,8 @@ const START_SERVER = () => {
   })
 
   app.use(cookieParser())
+
+  app.use(helmet())
 
   // Enable CORS
   app.use(cors(corsOptions))
@@ -43,6 +47,10 @@ const START_SERVER = () => {
   const io = socketIo(server, {
     cors: { corsOptions }
   })
+
+  // Truyền instance socket.io vào chatBotService
+  setupSocketIo(io)
+
   io.on('connection', (socket) => {
     fetchNotificationsSocket(socket)
     batchSocket(socket)
@@ -71,6 +79,7 @@ const START_SERVER = () => {
 
 CONNECT_DB()
   .then(() => {
+    // eslint-disable-next-line no-console
     console.log('Connected to MongoDB successfully')
     // Set up the TTL index after connecting to the database
   })

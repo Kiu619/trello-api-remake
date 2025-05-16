@@ -14,7 +14,8 @@ module.exports = {
   plugins: [],
   rules: {
     // Common
-    'no-console': 1,
+    "no-case-declarations": "off",
+    'no-console': ['error', { allow: ['error'] }],
     'no-extra-boolean-cast': 0,
     'no-lonely-if': 1,
     'no-unused-vars': 1,

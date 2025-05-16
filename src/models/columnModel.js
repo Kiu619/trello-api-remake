@@ -56,6 +56,25 @@ const findOneById = async (id) => {
   }
 }
 
+const findOneByTitle = async (boardId, title) => {
+  try {
+    const column = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ boardId: new ObjectId(boardId), title: title })
+    return column
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getCardPositionInColumn = async (columnId, cardId) => {
+  try {
+    const column = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) })
+    return column.cardOrderIds.indexOf(new ObjectId(cardId))
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+
 const pushCardOrderIds = async (card) => {
   try {
     const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
@@ -292,8 +311,15 @@ export const columnModel = {
   COLUMN_COLLECTION_SCHEMA,
   createNew,
   findOneById,
-  pushCardOrderIds, pullCardOrderIds,
-  update, deleteColumnById, deleteColumnsByBoardId,
+  findOneByTitle,
+  pushCardOrderIds,
+  pullCardOrderIds,
+  getCardPositionInColumn,
+  update,
+  deleteColumnById,
+  deleteColumnsByBoardId,
   moveColumnToDifferentBoard,
-  copyColumn, moveAllCardsToAnotherColumn, openCloseAllColumn
+  copyColumn,
+  moveAllCardsToAnotherColumn,
+  openCloseAllColumn
 }

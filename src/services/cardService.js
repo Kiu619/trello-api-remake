@@ -40,6 +40,24 @@ const getDetails = async (userId, cardId) => {
   }
 }
 
+const getDetailsByTitle = async (userId, boardId, cardTitle) => {
+  try {
+    const card = await cardModel.findOneByTitle(cardTitle)
+    return card
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getPositionInColumn = async (cardId, columnId) => {
+  try {
+    const card = await cardModel.getPositionInColumn(cardId, columnId)
+    return card
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 const moveCardToDifferentBoard = async (cardId, reqBody) => {
   try {
     const { currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition } = reqBody
@@ -204,7 +222,6 @@ const updateCardMembers = async (cardId, incomingMemberInfo) => {
 }
 
 const updateCard = async (cardId, updateData) => {
-  console.log('updateData', updateData)
   return await cardModel.update(cardId, updateData)
 }
 
@@ -228,6 +245,8 @@ export const cardService = {
   createNew,
   update,
   getDetails,
+  getDetailsByTitle,
+  getPositionInColumn,
   moveCardToDifferentBoard,
   copyCard,
   deleteCard
