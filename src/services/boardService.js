@@ -11,6 +11,7 @@ import { userModel } from '~/models/userModel'
 import { invitationModel } from '~/models/invitationModel'
 import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
+import { activityService } from './activityService'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -84,13 +85,13 @@ const getDetails = async (userId, boardId) => {
   }
 }
 
-const update = async (boardId, reqBody) => {
+const update = async (userId, boardId, reqBody) => {
   try {
     const updateData = {
       ...reqBody,
       updatedAt: Date.now()
     }
-    const updatedBoard = await boardModel.update(boardId, updateData)
+    const updatedBoard = await boardModel.update(userId, boardId, updateData)
     return updatedBoard
 
   } catch (error) {
@@ -229,17 +230,26 @@ const inviteUser = async (reqBody, inviterId) => {
   }
 }
 
-const addBoardAdmin = async (boardId, userId) => {
+const addBoardAdmin = async (userId, boardId, userIdToAdd) => {
   try {
-    const user = await userModel.findOneById(userId)
+    const userToAdd = await userModel.findOneById(userIdToAdd)
 
-    if (!user) {
+    if (!userToAdd) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
     }
 
-    let updatedBoard = await boardModel.pushOwnerIds(boardId, userId)
-    updatedBoard = await boardModel.pullMemberIds(boardId, userId)
+    let updatedBoard = await boardModel.pushOwnerIds(boardId, userIdToAdd)
+    updatedBoard = await boardModel.pullMemberIds(boardId, userIdToAdd)
 
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'addBoardAdmin',
+      boardId: boardId,
+      data: {
+        userName: userToAdd.displayName
+      }
+    })
     return updatedBoard
   }
   catch (error) {
@@ -247,17 +257,25 @@ const addBoardAdmin = async (boardId, userId) => {
   }
 }
 
-const removeBoardAdmin = async (boardId, userId) => {
+const removeBoardAdmin = async (userId, boardId, userIdToRemove) => {
   try {
-    const user = await userModel.findOneById(userId)
+    const userToRemove = await userModel.findOneById(userIdToRemove)
 
-    if (!user) {
+    if (!userToRemove) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
     }
 
-    let updatedBoard = await boardModel.pullOwnerIds(boardId, userId)
-    updatedBoard = await boardModel.pushMemberIds(boardId, userId)
-
+    let updatedBoard = await boardModel.pullOwnerIds(boardId, userIdToRemove)
+    updatedBoard = await boardModel.pushMemberIds(boardId, userIdToRemove)
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'removeBoardAdmin',
+      boardId: boardId,
+      data: {
+        userName: userToRemove.displayName
+      }
+    })
     return updatedBoard
   }
   catch (error) {
@@ -265,28 +283,43 @@ const removeBoardAdmin = async (boardId, userId) => {
   }
 }
 
-const removeMembers = async (boardId, userIds) => {
+const removeMembers = async (userId, boardId, userIds) => {
   try {
+    let usersToRemove = []
     // Remove each user from the board and the cards
     for (const userId of userIds) {
       // Remove user from the board
       await boardModel.pullMemberIds(boardId, userId)
 
       // Fetch all cards in the board
-      const cards = await GET_DB().collection(CARD_COLLECTION_NAME).find({ boardId: new ObjectId(boardId) }).toArray();
+      const cards = await GET_DB().collection(CARD_COLLECTION_NAME).find({ boardId: new ObjectId(boardId) }).toArray()
 
       // Remove user from each card
       for (const card of cards) {
-        await cardModel.removeMemberFromCard(card._id.toString(), userId);
+        await cardModel.removeMemberFromCard(card._id.toString(), userId)
       }
+
+      // Fetch the updated board after removing members
+      const userToRemove = await userModel.findOneById(userId)
+      usersToRemove.push(userToRemove)
     }
 
     // Fetch the updated board after removing members
-    const updatedBoard = await boardModel.findOneById(boardId);
+    const updatedBoard = await boardModel.findOneById(boardId)
 
-    return updatedBoard;
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'removeMembers',
+      boardId: boardId,
+      data: {
+        usersToRemove: usersToRemove
+      }
+    })
+
+    return updatedBoard
   } catch (error) {
-    throw new Error(error);
+    throw new Error(error)
   }
 }
 
@@ -305,6 +338,13 @@ const leaveBoard = async (boardId, userId) => {
 
     const updatedBoard = await boardModel.pullMemberIds(boardId, userId)
 
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'leaveBoard',
+      boardId: boardId
+    })
+
     return updatedBoard
 
   } catch (error) {
@@ -312,14 +352,23 @@ const leaveBoard = async (boardId, userId) => {
   }
 }
 
-const openCloseBoard = async (boardId, isClosed) => {
+const openCloseBoard = async (userId, boardId, isClosed) => {
   try {
-    const updatedBoard = await boardModel.update(boardId, {
+    const updatedBoard = await boardModel.update(userId, boardId, {
       isClosed: isClosed
     })
 
-    await columnModel.openCloseAllColumn(boardId, isClosed)
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'openCloseBoard',
+      boardId: boardId,
+      data: {
+        newBoardStatus: isClosed === true ? 'closed' : 'open'
+      }
+    })
 
+    await columnModel.openCloseAllColumn(boardId, isClosed)
     return updatedBoard
   } catch (error) {
     throw new Error(error)

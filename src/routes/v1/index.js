@@ -7,6 +7,7 @@ import { invitationRoute } from './invitationRoute'
 import { notificationRoutes } from './notificationRoute'
 import { templateRoutes } from './templateRoute'
 import { chatBotRoute } from './chatBotRoute'
+import { activityRoutes } from './activityRoute'
 
 const Router = express.Router()
 
@@ -31,5 +32,8 @@ Router.use('/notification', notificationRoutes)
 
 // AI API
 Router.use('/chatbot', chatBotRoute)
+
+// Activity API
+Router.use('/activity', activityRoutes)
 
 export const APIs_V1 = Router

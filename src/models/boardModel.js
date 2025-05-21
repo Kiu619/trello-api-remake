@@ -6,6 +6,7 @@ import { BOARD_TYPES } from '~/utils/constants'
 import { columnModel } from './columnModel'
 import { cardModel } from './cardModel'
 import { userModel } from './userModel'
+import { activityService } from '~/services/activityService'
 
 // Define Collection (name & schema)
 export const BOARD_COLLECTION_NAME = 'boards'
@@ -52,6 +53,12 @@ const createNew = async (userId, data) => {
       ownerIds: [new ObjectId(userId)]
     }
     const newBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).insertOne(newBoardToInsert)
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'createBoard',
+      boardId: newBoard.insertedId.toString()
+    })
     return newBoard
   } catch (error) {
     throw new Error(error)
@@ -146,7 +153,7 @@ const pullColumnOrderIds = async (column) => {
   }
 }
 
-const update = async (boardId, updateData) => {
+const update = async (userId, boardId, updateData) => {
   try {
     // Loại bỏ các trường không được phép update
     Object.keys(updateData).forEach(key => {
@@ -164,6 +171,41 @@ const update = async (boardId, updateData) => {
       { $set: updateData },
       { returnDocument: 'after' }
     )
+
+    // Tạo activity theo các trường hợp (rename, change description, change type)
+    if (updateData.title) {
+      await activityService.createActivity({
+        userId,
+        type: 'renameBoard',
+        boardId: boardId,
+        data: {
+          newBoardTitle: updateData.title
+        }
+      })
+    }
+
+    if (updateData.description) {
+      await activityService.createActivity({
+        userId,
+        type: 'changeDescriptionBoard',
+        boardId: boardId,
+        data: {
+          newBoardDescription: updateData.description
+        }
+      })
+    }
+
+    if (updateData.type) {
+      await activityService.createActivity({
+        userId,
+        type: 'changeTypeBoard',
+        boardId: boardId,
+        data: {
+          newBoardType: updateData.type
+        }
+      })
+    }
+
     return result
   } catch (error) {
     throw new Error(error)
@@ -204,6 +246,7 @@ const pullMemberIds = async (boardId, userId) => {
     throw new Error(error)
   }
 }
+
 
 const pushOwnerIds = async (boardId, userId) => {
   try {

@@ -6,6 +6,7 @@ import ApiError from '~/utils/ApiError'
 import { BOARD_INVITATION_STATUS } from '~/utils/constants'
 import { OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators'
 import { boardModel } from './boardModel'
+import { activityService } from '~/services/activityService'
 
 const INVITE_NOTIFICATION_SCHEMA = Joi.object({
   boardId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -231,6 +232,12 @@ const updateBoardInvitation = async (userId, notificationId, status) => {
 
     if (result.details.status === BOARD_INVITATION_STATUS.ACCEPTED) {
       await boardModel.pushMemberIds(boardId, userId)
+
+      await activityService.createActivity({
+        userId,
+        type: 'joinBoard',
+        boardId: boardId
+      })
     }
 
     return result
@@ -275,6 +282,12 @@ const updateBoardRequest = async (userId, notificationId, status) => {
 
     if (result.details.status === BOARD_INVITATION_STATUS.ACCEPTED) {
       await boardModel.pushMemberIds(boardId, getNotification.details.senderId)
+
+      await activityService.createActivity({
+        userId: getNotification.details.senderId,
+        type: 'joinBoard',
+        boardId: boardId
+      })
     }
 
     return result

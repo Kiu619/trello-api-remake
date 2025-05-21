@@ -60,7 +60,7 @@ export const boardChatBotService = {
       }
 
       // Gọi service để cập nhật board
-      await boardService.update(boardId, updateData)
+      await boardService.update(userId, boardId, updateData)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -111,7 +111,7 @@ export const boardChatBotService = {
       }
 
       // Cập nhật trạng thái board thành đã mở
-      await boardService.openCloseBoard(boardId, false)
+      await boardService.openCloseBoard(userId, boardId, false)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -152,7 +152,7 @@ export const boardChatBotService = {
       }
 
       // Cập nhật trạng thái board thành đã đóng
-      await boardService.openCloseBoard(boardId, true)
+      await boardService.openCloseBoard(userId, boardId, true)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)

@@ -20,7 +20,7 @@ const SESSIONS_SCHEMA = Joi.object({
 
 
 // Define Collection (name & schema)
-const USER_COLLECTION_NAME = 'users'
+export const USER_COLLECTION_NAME = 'users'
 const USER_COLLECTION_SCHEMA = Joi.object({
   email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE), // unique
   password: Joi.string().required(),
