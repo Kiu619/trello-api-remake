@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { chatBotHistoryModel } from '~/models/chatBotHistoryModel'
 import { cardChatBotService } from '~/services/cardChatBotService'
 import { columnChatBotService } from '~/services/columnChatBotService'
+import { boardChatBotService } from '~/services/boardChatBotService'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -46,7 +47,9 @@ const COMMAND_PATTERNS = {
   OPEN_COLUMN: /(?:mở|open) (?:cột|column|các cột|nhiều cột|tất cả cột|all column)/i,
 
   // Board patterns
-  RENAME_BOARD: /(?:đổi tên|rename|sửa tên) (?:bảng|board)/i
+  UPDATE_BOARD: /(?:cập nhật|update|sửa|chỉnh sửa|edit|đổi tên|rename) (?:bảng|board)/i,
+  OPEN_BOARD: /(?:mở|open) (?:bảng|board)/i,
+  CLOSE_BOARD: /(?:đóng|close) (?:bảng|board)/i
 }
 
 // Kiểm tra xem câu lệnh có sử dụng dấu ngoặc đơn hoặc ngoặc kép cho tên thẻ/cột không
@@ -215,7 +218,8 @@ Hãy phân tích ý định của người dùng là một trong các loại sau
 11. CLOSE_COLUMN (đóng cột): Đóng một hoặc nhiều cột trên bảng
 12. OPEN_COLUMN (mở cột): Mở một hoặc nhiều cột trên bảng
 13. RENAME_COLUMN (đổi tên cột): Đổi tên cột trên bảng
-14. GENERAL_QUERY (câu hỏi chung): Câu hỏi hoặc trò chuyện chung không liên quan đến các hành động trên
+14. UPDATE_BOARD (cập nhật bảng): Cập nhật thông tin của bảng (tiêu đề, loại)
+15. GENERAL_QUERY (câu hỏi chung): Câu hỏi hoặc trò chuyện chung không liên quan đến các hành động trên
 
 Nếu thuộc các loại từ 1-13, hãy trích xuất thông tin cần thiết tương ứng:
 - MOVE_CARD: cardTitle, fromColumn, toColumn, position (nếu có)
@@ -231,6 +235,9 @@ Nếu thuộc các loại từ 1-13, hãy trích xuất thông tin cần thiết
 - CLOSE_COLUMN: columnTitles (mảng tên các cột cần đóng), positions (mảng vị trí cột, nếu có), isAllColumns (boolean), isByPosition (boolean)
 - OPEN_COLUMN: columnTitles (mảng tên các cột cần mở), positions (mảng vị trí cột, nếu có), isAllColumns (boolean), isByPosition (boolean)
 - RENAME_COLUMN: columnTitle, newTitle (nếu có)
+- UPDATE_BOARD: newTitle (nếu có), newType (nếu có, giá trị là 'public' hoặc 'private')
+- OPEN_BOARD: không cần thông tin thêm
+- CLOSE_BOARD: không cần thông tin thêm
 
 Trả về JSON có cấu trúc:
 {
@@ -695,6 +702,32 @@ export const chatBotService = {
         return response
       }
 
+      case 'UPDATE_BOARD': {
+        if (analysis.confidence >= 0.7) {
+          return await boardChatBotService.handleUpdateBoard(message, userId, boardId)
+        }
+
+        const missingUpdateBoardFields = []
+        if (!analysis.data.newTitle && !analysis.data.newType) {
+          missingUpdateBoardFields.push('thông tin cần cập nhật (tiêu đề hoặc loại board)')
+        }
+
+        if (missingUpdateBoardFields.length > 0) {
+          const response = `Vui lòng cung cấp thêm ${missingUpdateBoardFields.join(', ')} để tôi có thể giúp bạn cập nhật board. Ví dụ: "Cập nhật board tiêu đề mới 'Tiêu đề mới'" hoặc "Cập nhật board loại mới public".`
+          await this.saveChat(userId, boardId, message, response)
+          return response
+        }
+        break
+      }
+
+      case 'OPEN_BOARD': {
+        return await boardChatBotService.handleOpenBoard(message, userId, boardId)
+      }
+
+      case 'CLOSE_BOARD': {
+        return await boardChatBotService.handleCloseBoard(message, userId, boardId)
+      }
+
       case 'GENERAL_QUERY':
       default:
         // Nếu không nhận diện được ý định cụ thể hoặc là câu hỏi chung, sử dụng chat thông thường
@@ -785,6 +818,15 @@ export const chatBotService = {
           }
           await this.saveChat(userId, boardId, message, formatCheck.message)
           return formatCheck.message
+        }
+        else if (COMMAND_PATTERNS.UPDATE_BOARD.test(lowerMessage)) {
+          return await boardChatBotService.handleUpdateBoard(message, userId, boardId)
+        }
+        else if (COMMAND_PATTERNS.OPEN_BOARD.test(lowerMessage)) {
+          return await boardChatBotService.handleOpenBoard(message, userId, boardId)
+        }
+        else if (COMMAND_PATTERNS.CLOSE_BOARD.test(lowerMessage)) {
+          return await boardChatBotService.handleCloseBoard(message, userId, boardId)
         }
         // Mặc định xử lý như phân tích nội dung thông thường
         const completion = await openai.chat.completions.create({
