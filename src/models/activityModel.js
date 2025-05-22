@@ -6,27 +6,6 @@ import { USER_COLLECTION_NAME } from './userModel'
 
 // Các loại hoạt động
 export const ACTIVITY_TYPES = {
-  ADD_CARD: 'addCard',
-  MOVE_CARD: 'moveCard',
-  COPY_CARD: 'copyCard',
-  UPDATE_CARD_TITLE: 'updateCardTitle',
-  UPDATE_CARD_DESCRIPTION: 'updateCardDescription',
-  ADD_COMMENT: 'addComment',
-  ADD_ATTACHMENT: 'addAttachment',
-  REMOVE_ATTACHMENT: 'removeAttachment',
-  ADD_CHECKLIST: 'addChecklist',
-  UPDATE_CHECKLIST_ITEM: 'updateChecklistItem',
-  ADD_MEMBER_TO_CARD: 'addMemberToCard',
-  REMOVE_MEMBER_FROM_CARD: 'removeMemberFromCard',
-  ADD_LABEL: 'addLabel',
-  REMOVE_LABEL: 'removeLabel',
-  ADD_DUE_DATE: 'addDueDate',
-  UPDATE_DUE_DATE: 'updateDueDate',
-  REMOVE_DUE_DATE: 'removeDueDate',
-  ADD_COLUMN: 'addColumn',
-  UPDATE_COLUMN_TITLE: 'updateColumnTitle',
-  REMOVE_COLUMN: 'removeColumn',
-
   ADD_MEMBER_TO_BOARD: 'addMemberToBoard',
   CREATE_BOARD: 'createBoard',
   RENAME_BOARD: 'renameBoard',
@@ -37,7 +16,21 @@ export const ACTIVITY_TYPES = {
   REMOVE_MEMBERS: 'removeMembers',
   OPEN_CLOSE_BOARD: 'openCloseBoard',
   JOIN_BOARD: 'joinBoard',
-  LEAVE_BOARD: 'leaveBoard'
+  LEAVE_BOARD: 'leaveBoard',
+
+  CREATE_COLUMN: 'createColumn',
+  RENAME_COLUMN: 'renameColumn',
+  REMOVE_COLUMN: 'removeColumn',
+
+  CREATE_CARD: 'createCard',
+  OPEN_CLOSE_COLUMN: 'openCloseColumn',
+  OPEN_CLOSE_ALL_COLUMNS: 'openCloseAllColumns',
+  MOVE_ALL_CARDS: 'moveAllCards',
+  MOVE_COLUMN_TO_DIFFERENT_BOARD: 'moveColumnToDifferentBoard',
+  COLUMN_MOVED_FROM_DIFFERENT_BOARD: 'columnMovedFromDifferentBoard',
+  COPY_COLUMN_TO_SAME_BOARD: 'copyColumnToSameBoard',
+  COPY_COLUMN_TO_ANOTHER_BOARD: 'copyColumnToAnotherBoard',
+  COPY_COLUMN_FROM_ANOTHER_BOARD: 'copyColumnFromAnotherBoard'
 }
 
 export const ACTIVITY_COLLECTION_NAME = 'activities'
@@ -58,6 +51,10 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
     newBoardType: Joi.string(),
     newBoardStatus: Joi.string(),
     usersToRemove: Joi.array(),
+    sourceBoardId: Joi.string(),
+    sourceBoardTitle: Joi.string(),
+    destinationBoardId: Joi.string(),
+    destinationBoardTitle: Joi.string(),
 
     // Thông tin chung
     userName: Joi.string(),
@@ -73,6 +70,8 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
     destinationColumnId: Joi.string(),
     destinationColumnTitle: Joi.string(),
     columnTitle: Joi.string(),
+    oldColumnTitle: Joi.string(),
+    newColumnStatus: Joi.string(),
 
     // Thông tin về comment
     commentText: Joi.string(),

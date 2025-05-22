@@ -75,7 +75,7 @@ export const columnChatBotService = {
           }
 
           // Tạo cột mới và lấy thông tin về cột
-          const newColumn = await columnService.createNew(newColumnData)
+          const newColumn = await columnService.createNew(userId, newColumnData)
 
           // Nếu không phải vị trí cuối cùng, điều chỉnh thứ tự cột
           if (newPosition < updatedBoard.columnOrderIds.length - 1) {
@@ -184,7 +184,7 @@ export const columnChatBotService = {
         }
 
         // Tạo cột mới và lấy thông tin về cột
-        const newColumn = await columnService.createNew(newColumnData)
+        const newColumn = await columnService.createNew(userId, newColumnData)
 
         // Lưu ý: service columnService.createNew đã tự động thêm columnId vào cuối mảng columnOrderIds
         // Nếu vị trí không phải ở cuối, cần điều chỉnh lại thứ tự cột trong board
@@ -532,7 +532,7 @@ export const columnChatBotService = {
 
         // Đóng các cột
         for (const column of columnsByPosition) {
-          await columnService.closeColumn(column.id, true)
+          await columnService.closeColumn(userId, column.id, true)
         }
 
         // Phát sự kiện batch để cập nhật UI
@@ -557,7 +557,7 @@ export const columnChatBotService = {
       // Trường hợp 1: Đóng tất cả các cột
       if (closeAllColumnsMatch) {
         // Gọi service để đóng tất cả các cột
-        await columnService.closeAllColumns(boardId, true)
+        await columnService.closeAllColumns(userId, boardId, true)
 
         // Phát sự kiện batch để cập nhật UI
         emitBatchEvent(boardId)
@@ -623,7 +623,7 @@ export const columnChatBotService = {
 
           if (column) {
             // Đóng cột
-            await columnService.closeColumn(column._id.toString(), true)
+            await columnService.closeColumn(userId, column._id.toString(), true)
             closedColumns.push(columnTitle)
           } else {
             notFoundColumns.push(columnTitle)
@@ -694,7 +694,7 @@ export const columnChatBotService = {
       }
 
       // Đóng cột
-      await columnService.closeColumn(column._id.toString(), true)
+      await columnService.closeColumn(userId, column._id.toString(), true)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -770,7 +770,7 @@ export const columnChatBotService = {
 
         // Mở các cột
         for (const column of columnsByPosition) {
-          await columnService.closeColumn(column.id, false)
+          await columnService.closeColumn(userId, column.id, false)
         }
 
         // Phát sự kiện batch để cập nhật UI
@@ -795,7 +795,7 @@ export const columnChatBotService = {
       // Trường hợp 1: Mở tất cả các cột
       if (openAllColumnsMatch) {
         // Gọi service để mở tất cả các cột
-        await columnService.closeAllColumns(boardId, false)
+        await columnService.closeAllColumns(userId, boardId, false)
 
         // Phát sự kiện batch để cập nhật UI
         emitBatchEvent(boardId)
@@ -861,7 +861,7 @@ export const columnChatBotService = {
 
           if (column) {
             // Mở cột
-            await columnService.closeColumn(column._id.toString(), false)
+            await columnService.closeColumn(userId, column._id.toString(), false)
             openedColumns.push(columnTitle)
           } else {
             notFoundColumns.push(columnTitle)
@@ -932,7 +932,7 @@ export const columnChatBotService = {
       }
 
       // Mở cột
-      await columnService.closeColumn(column._id.toString(), false)
+      await columnService.closeColumn(userId, column._id.toString(), false)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -1003,12 +1003,13 @@ export const columnChatBotService = {
 
       // Cập nhật tên cột
       const updateData = {
+        oldTitle: oldColumnTitle,
         title: newColumnTitle,
         slug: slugify(newColumnTitle) // Đảm bảo slug cũng được cập nhật
       }
 
       // Gọi service để cập nhật tên cột
-      await columnService.update(columnToRename._id.toString(), updateData)
+      await columnService.update(userId, columnToRename._id.toString(), updateData)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)

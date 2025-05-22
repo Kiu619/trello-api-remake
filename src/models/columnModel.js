@@ -6,6 +6,7 @@ import { GET_DB } from '~/config/mongodb'
 import { BOARD_COLLECTION_NAME } from './boardModel'
 import { CARD_COLLECTION_NAME, cardModel } from './cardModel'
 import { slugify } from '~/utils/formatter'
+import { activityService } from '~/services/activityService'
 
 // Define Collection (name & schema)
 export const COLUMN_COLLECTION_NAME = 'columns'
@@ -125,6 +126,18 @@ const update = async (columnId, updateData) => {
   }
 }
 
+const updateColumnIdInCards = async (columnId, newColumnId) => {
+  try {
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).updateMany(
+      { columnId: new ObjectId(columnId) },
+      { $set: { columnId: new ObjectId(newColumnId) } }
+    )
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 const deleteColumnById = async (columnId) => {
   try {
     const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).deleteOne({ _id: new ObjectId(columnId) })
@@ -143,9 +156,8 @@ const deleteColumnsByBoardId = async (boardId) => {
   }
 }
 
-const moveColumnToDifferentBoard = async (columnId, currentBoardId, newBoardId, newPosition) => {
+const moveColumnToDifferentBoard = async (userId, columnId, currentBoardId, newBoardId, newPosition) => {
   try {
-
     const column = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) })
     if (!column) {
       throw new Error('Column not found')
@@ -178,7 +190,7 @@ const moveColumnToDifferentBoard = async (columnId, currentBoardId, newBoardId, 
 
     // Move each card to the new board using the moveCardToDifferentBoard function
     await Promise.all(cards.map(card =>
-      cardModel.moveCardToDifferentBoard(card._id.toString(), currentBoardId, columnId, newBoardId, columnId, 0)
+      cardModel.moveCardToDifferentBoard(userId, card._id.toString(), currentBoardId, columnId, newBoardId, columnId, 0)
     ))
 
     // Update the column's boardId
@@ -188,18 +200,53 @@ const moveColumnToDifferentBoard = async (columnId, currentBoardId, newBoardId, 
       { returnDocument: 'after' }
     )
 
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'moveColumnToDifferentBoard',
+      columnId: columnId.toString(),
+      boardId: currentBoardId.toString(),
+      data: {
+        sourceColumnTitle: column.title,
+        destinationBoardId: newBoardId.toString(),
+        destinationBoardTitle: newBoard.title
+      }
+    })
+
+    await activityService.createActivity({
+      userId,
+      type: 'columnMovedFromDifferentBoard',
+      columnId: columnId.toString(),
+      boardId: newBoardId.toString(),
+      data: {
+        sourceColumnTitle: column.title,
+        sourceBoardId: currentBoardId.toString(),
+        sourceBoardTitle: currentBoard.title
+      }
+    })
+
     return updatedColumn.value
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const copyColumn = async (columnId, currentBoardId, newBoardId, newPosition, title, forBoardCopy) => {
+const copyColumn = async (userId, columnId, currentBoardId, newBoardId, newPosition, title, forBoardCopy) => {
   try {
 
     const column = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) })
     if (!column) {
       throw new Error('Column not found')
+    }
+
+    const currentBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(currentBoardId) })
+    if (!currentBoard) {
+      throw new Error('Current board not found')
+    }
+
+    const newBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(newBoardId) })
+    if (!newBoard) {
+      throw new Error('New board not found')
     }
 
     const newColumn = {
@@ -223,16 +270,6 @@ const copyColumn = async (columnId, currentBoardId, newBoardId, newPosition, tit
     // Fetch all cards in the column
     const cards = await GET_DB().collection(CARD_COLLECTION_NAME).find({ columnId: new ObjectId(columnId) }).toArray()
 
-    // Copy each card to the new board using the copyCard function
-    // const keepingItems = [
-    //   'memberIds',
-    //   'dueDate',
-    //   'checklists',
-    //   'attachments',
-    //   'location',
-    //   'comments'
-    // ]
-
     let keepingItems = []
     if (forBoardCopy) {
       keepingItems = ['dueDate', 'checklists', 'attachments', 'location']
@@ -249,44 +286,45 @@ const copyColumn = async (columnId, currentBoardId, newBoardId, newPosition, tit
       cardModel.copyCard(card._id.toString(), currentBoardId, columnId, newBoardId, newColumn._id.toString(), 0, card.title, keepingItems)
     ))
 
-    return newColumn
-  } catch (error) {
-    throw new Error(error)
-  }
-}
+    // Tạo activity
+    if (currentBoardId === newBoardId) {
+      await activityService.createActivity({
+        userId,
+        type: 'copyColumnToSameBoard',
+        columnId: columnId.toString(),
+        boardId: currentBoardId.toString(),
+        data: {
+          sourceColumnTitle: column.title,
+          destinationColumnTitle: newColumn.title
+        }
+      })
+    } else {
+      await activityService.createActivity({
+        userId,
+        type: 'copyColumnToAnotherBoard',
+        columnId: columnId.toString(),
+        boardId: currentBoardId.toString(),
+        data: {
+          destinationBoardId: newBoardId.toString(),
+          destinationBoardTitle: newBoard.title,
+          sourceColumnTitle: column.title,
+          destinationColumnTitle: newColumn.title
+        }
+      })
 
-const moveAllCardsToAnotherColumn = async (columnId, newColumnId) => {
-  try {
-
-    const db = GET_DB()
-
-    const currentColumn = await db.collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) })
-    if (!currentColumn) {
-      throw new Error('Current column not found')
+      await activityService.createActivity({
+        userId,
+        type: 'copyColumnFromAnotherBoard',
+        columnId: columnId.toString(),
+        boardId: newBoardId.toString(),
+        data: {
+          sourceBoardId: currentBoardId.toString(),
+          sourceBoardTitle: currentBoard.title,
+          sourceColumnTitle: column.title,
+          destinationColumnTitle: newColumn.title
+        }
+      })
     }
-
-    const newColumn = await db.collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(newColumnId) })
-    if (!newColumn) {
-      throw new Error('New column not found')
-    }
-
-    // Remove cardOrderIds from currentColumn
-    await db.collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
-      { _id: new ObjectId(columnId) },
-      { $set: { cardOrderIds: [] } }
-    )
-
-    // Push cardOrderIds to newColumn
-    await db.collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
-      { _id: new ObjectId(newColumnId) },
-      { $push: { cardOrderIds: { $each: currentColumn.cardOrderIds } } }
-    )
-
-    // Update columnId for each card in the old column
-    await db.collection(CARD_COLLECTION_NAME).updateMany(
-      { columnId: new ObjectId(columnId) },
-      { $set: { columnId: new ObjectId(newColumnId) } }
-    )
 
     return newColumn
   } catch (error) {
@@ -316,10 +354,10 @@ export const columnModel = {
   pullCardOrderIds,
   getCardPositionInColumn,
   update,
+  updateColumnIdInCards,
   deleteColumnById,
   deleteColumnsByBoardId,
   moveColumnToDifferentBoard,
   copyColumn,
-  moveAllCardsToAnotherColumn,
   openCloseAllColumn
 }
