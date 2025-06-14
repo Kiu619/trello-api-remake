@@ -47,7 +47,8 @@ const deleteBoard = async (req, res, next) => {
 
 const moveCardToDifferentColumn = async (req, res, next) => {
   try {
-    const result = await boardService.moveCardToDifferentColumn(req.body)
+    const userId = req.jwtDecoded._id
+    const result = await boardService.moveCardToDifferentColumn(userId, req.body)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)

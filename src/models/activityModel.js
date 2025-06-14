@@ -21,8 +21,6 @@ export const ACTIVITY_TYPES = {
   CREATE_COLUMN: 'createColumn',
   RENAME_COLUMN: 'renameColumn',
   REMOVE_COLUMN: 'removeColumn',
-
-  CREATE_CARD: 'createCard',
   OPEN_CLOSE_COLUMN: 'openCloseColumn',
   OPEN_CLOSE_ALL_COLUMNS: 'openCloseAllColumns',
   MOVE_ALL_CARDS: 'moveAllCards',
@@ -30,7 +28,44 @@ export const ACTIVITY_TYPES = {
   COLUMN_MOVED_FROM_DIFFERENT_BOARD: 'columnMovedFromDifferentBoard',
   COPY_COLUMN_TO_SAME_BOARD: 'copyColumnToSameBoard',
   COPY_COLUMN_TO_ANOTHER_BOARD: 'copyColumnToAnotherBoard',
-  COPY_COLUMN_FROM_ANOTHER_BOARD: 'copyColumnFromAnotherBoard'
+  COPY_COLUMN_FROM_ANOTHER_BOARD: 'copyColumnFromAnotherBoard',
+  MOVE_CARD_TO_DIFFERENT_COLUMN: 'moveCardToDifferentColumn',
+
+  CREATE_CARD: 'createCard',
+  RENAME_CARD: 'renameCard',
+  UPDATE_CARD_COVER: 'updateCardCover',
+  UPDATE_CARD_DESCRIPTION: 'updateCardDescription',
+  UPDATE_CARD_MEMBERS: 'updateCardMembers',
+  ADD_ATTACHMENT: 'addAttachment',
+  EDIT_ATTACHMENT: 'editAttachment',
+  DELETE_ATTACHMENT: 'deleteAttachment',
+
+  CREATE_CHECKLIST: 'createChecklist',
+  UPDATE_CHECKLIST: 'updateChecklist',
+  DELETE_CHECKLIST: 'deleteChecklist',
+  ADD_CHECKLIST_ITEM: 'addChecklistItem',
+  UPDATE_CHECKLIST_ITEM: 'updateChecklistItem',
+  DELETE_CHECKLIST_ITEM: 'deleteChecklistItem',
+
+  ADD_EDIT_COMMENT: 'addEditComment',
+
+  REMOVE_DUE_DATE: 'removeDueDate',
+  SET_DUE_DATE: 'setDueDate',
+
+  UPDATE_CARD_LOCATION: 'updateCardLocation',
+  REMOVE_CARD_LOCATION: 'removeCardLocation',
+
+  CLOSE_CARD: 'closeCard',
+  OPEN_CARD: 'openCard',
+
+  DELETE_CARD: 'deleteCard',
+
+  MOVE_CARD_TO_DIFFERENT_BOARD: 'moveCardToDifferentBoard',
+  CARD_MOVED_FROM_DIFFERENT_BOARD: 'cardMovedFromDifferentBoard',
+
+  COPY_CARD_TO_SAME_BOARD: 'copyCardToSameBoard',
+  COPY_CARD_TO_ANOTHER_BOARD: 'copyCardToAnotherBoard',
+  COPY_CARD_FROM_ANOTHER_BOARD: 'copyCardFromAnotherBoard'
 }
 
 export const ACTIVITY_COLLECTION_NAME = 'activities'
@@ -56,6 +91,10 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
     destinationBoardId: Joi.string(),
     destinationBoardTitle: Joi.string(),
 
+    // Move card to different column
+    prevColumnTitle: Joi.string(),
+    nextColumnTitle: Joi.string(),
+
     // Thông tin chung
     userName: Joi.string(),
 
@@ -63,7 +102,7 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
     cardTitle: Joi.string(),
     oldCardTitle: Joi.string(),
     newCardTitle: Joi.string(),
-
+    joinType: Joi.string(),
     // Thông tin về column
     sourceColumnId: Joi.string(),
     sourceColumnTitle: Joi.string(),
@@ -75,22 +114,27 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
 
     // Thông tin về comment
     commentText: Joi.string(),
+    commentId: Joi.string(),
+    commentType: Joi.string(),
 
     // Thông tin về attachment
     attachmentName: Joi.string(),
+    newAttachmentName: Joi.string(),
 
     // Thông tin về checklist
     checklistTitle: Joi.string(),
     checklistItemTitle: Joi.string(),
-
-    // Thông tin về label
-    labelName: Joi.string(),
-    labelColor: Joi.string(),
+    oldChecklistTitle: Joi.string(),
+    newChecklistTitle: Joi.string(),
+    oldChecklistItemTitle: Joi.string(),
+    newChecklistItemTitle: Joi.string(),
 
     // Thông tin về due date
-    dueDate: Joi.date(),
-    oldDueDate: Joi.date(),
-    newDueDate: Joi.date()
+    dueDate: Joi.string().isoDate(),
+    dueDateTime: Joi.string(),
+
+    // Thông tin về location
+    location: Joi.string()
   }).default(null)
 })
 
@@ -146,12 +190,65 @@ const getActivitiesByBoardId = async (boardId) => {
   }
 }
 
+
 const getActivitiesByCardId = async (cardId) => {
   try {
-    const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME)
-      .find({ cardId: new ObjectId(cardId) })
-      .sort({ createdAt: -1 })
-      .toArray()
+    // Lấy activity của board và lấy thông tin của user theo userId (chỉ cần lấy displayName và avatar)
+    const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME).aggregate([
+      { $match: { cardId: new ObjectId(cardId) } },
+      { $lookup: { from: USER_COLLECTION_NAME, localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $project: {
+        'user': {
+          _id: 1,
+          displayName: 1,
+          avatar: 1
+        },
+        'type': 1,
+        'data': 1,
+        'cardId': 1,
+        'boardId': 1,
+        'createdAt': 1
+      } },
+      { $sort: { createdAt: -1 } }
+    ]).toArray()
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getActivitiesByUserId = async (userId, boardId) => {
+  try {
+    const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME).aggregate([
+      { $match: { userId: new ObjectId(userId), boardId: new ObjectId(boardId) } },
+      { $lookup: { from: USER_COLLECTION_NAME, localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $project: {
+        'user': {
+          _id: 1,
+          displayName: 1,
+          avatar: 1
+        },
+        'type': 1,
+        'data': 1,
+        'cardId': 1,
+        'columnId': 1,
+        'boardId': 1,
+        'createdAt': 1
+      } },
+      { $sort: { createdAt: -1 } }
+    ]).toArray()
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const deleteActivityByDeleteComment = async (cardId, commentId) => {
+  try {
+    const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME).deleteOne({ cardId: new ObjectId(cardId), 'data.commentId': commentId })
     return result
   } catch (error) {
     throw new Error(error)
@@ -161,5 +258,7 @@ const getActivitiesByCardId = async (cardId) => {
 export const activityModel = {
   createNew,
   getActivitiesByBoardId,
+  getActivitiesByUserId,
+  deleteActivityByDeleteComment,
   getActivitiesByCardId
 }

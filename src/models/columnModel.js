@@ -187,19 +187,6 @@ const moveColumnToDifferentBoard = async (userId, columnId, currentBoardId, newB
 
     // Fetch all cards in the column
     const cards = await GET_DB().collection(CARD_COLLECTION_NAME).find({ columnId: new ObjectId(columnId) }).toArray()
-
-    // Move each card to the new board using the moveCardToDifferentBoard function
-    await Promise.all(cards.map(card =>
-      cardModel.moveCardToDifferentBoard(userId, card._id.toString(), currentBoardId, columnId, newBoardId, columnId, 0)
-    ))
-
-    // Update the column's boardId
-    const updatedColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
-      { _id: new ObjectId(columnId) },
-      { $set: { boardId: new ObjectId(newBoardId) } },
-      { returnDocument: 'after' }
-    )
-
     // Tạo activity
     await activityService.createActivity({
       userId,
@@ -224,6 +211,17 @@ const moveColumnToDifferentBoard = async (userId, columnId, currentBoardId, newB
         sourceBoardTitle: currentBoard.title
       }
     })
+    // Move each card to the new board using the moveCardToDifferentBoard function
+    await Promise.all(cards.map(card =>
+      cardModel.moveCardToDifferentBoard(userId, card._id.toString(), currentBoardId, columnId, newBoardId, columnId, 0)
+    ))
+
+    // Update the column's boardId
+    const updatedColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(columnId) },
+      { $set: { boardId: new ObjectId(newBoardId) } },
+      { returnDocument: 'after' }
+    )
 
     return updatedColumn.value
   } catch (error) {
@@ -282,10 +280,6 @@ const copyColumn = async (userId, columnId, currentBoardId, newBoardId, newPosit
         'comments']
     }
 
-    await Promise.all(cards.map(card =>
-      cardModel.copyCard(card._id.toString(), currentBoardId, columnId, newBoardId, newColumn._id.toString(), 0, card.title, keepingItems)
-    ))
-
     // Tạo activity
     if (currentBoardId === newBoardId) {
       await activityService.createActivity({
@@ -325,6 +319,10 @@ const copyColumn = async (userId, columnId, currentBoardId, newBoardId, newPosit
         }
       })
     }
+
+    await Promise.all(cards.map(card =>
+      cardModel.copyCard(userId, card._id.toString(), currentBoardId, columnId, newBoardId, newColumn._id.toString(), 0, card.title, keepingItems)
+    ))
 
     return newColumn
   } catch (error) {

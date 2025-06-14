@@ -145,7 +145,6 @@ const getUsers = async (req, res, next) => {
   try {
     const { q } = req.query
     const queryFilter = q
-    console.log('queryFilter', queryFilter)
     const users = await userService.getUsers(queryFilter)
     res.status(StatusCodes.OK).json(users)
   } catch (error) {

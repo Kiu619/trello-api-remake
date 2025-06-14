@@ -24,6 +24,9 @@ Router.route('/:id')
 
   .delete(authMiddleware.isAuthorized, cardValidation.deleteCard, cardController.deleteCard)
 
+Router.route('/labels/:id')
+  .put(authMiddleware.isAuthorized, cardController.updateLabel)
+
 Router.route('/move_card_to_different_board/:id')
   .put(authMiddleware.isAuthorized, cardValidation.moveCardToDifferentBoardAndCopy, cardController.moveCardToDifferentBoard)
 

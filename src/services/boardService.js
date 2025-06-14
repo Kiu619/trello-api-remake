@@ -117,7 +117,7 @@ const deleteBoard = async (boardId) => {
   }
 }
 
-const moveCardToDifferentColumn = async (reqBody) => {
+const moveCardToDifferentColumn = async (userId, reqBody) => {
   try {
     /**
   * Khi di chuyển card sang Column khác:
@@ -137,11 +137,28 @@ const moveCardToDifferentColumn = async (reqBody) => {
       updatedAt: Date.now()
     })
 
-    await cardModel.update(reqBody.currentCardId, {
+    await cardModel.update(userId, reqBody.currentCardId, {
       columnId: reqBody.nextColumnId
     })
 
-    return { updateResult: 'Successfully' }
+    const prevColumn = await columnModel.findOneById(reqBody.prevColumnId)
+    const nextColumn = await columnModel.findOneById(reqBody.nextColumnId)
+    const card = await cardModel.findOneById(reqBody.currentCardId)
+
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'moveCardToDifferentColumn',
+      boardId: card.boardId.toString(),
+      cardId: card._id.toString(),
+      data: {
+        cardTitle: card.title,
+        prevColumnTitle: prevColumn.title,
+        nextColumnTitle: nextColumn.title
+      }
+    })
+
+    return { updateResult: 'Successfully', prevColumn, nextColumn }
     // return newBoard
   } catch (error) {
     throw new Error(error)
@@ -410,7 +427,7 @@ const copyBoard = async (userId, boardId, boardTitle) => {
     // Copy columns in the order specified by columnOrderIds
     let forBoardCopy = true
     await Promise.all(columns.map(async (column, index) => {
-      await columnModel.copyColumn(column._id.toString(), boardId, newBoard.insertedId.toString(), index, column.title, forBoardCopy)
+      await columnModel.copyColumn(userId, column._id.toString(), boardId, newBoard.insertedId.toString(), index, column.title, forBoardCopy)
     }))
 
     return newBoard

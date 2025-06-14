@@ -92,15 +92,15 @@ export const cardChatBotService = {
       const updatedSourceCardOrderIds = sourceColumn.cardOrderIds.filter(
         cardId => cardId.toString() !== card._id.toString()
       )
-      await columnService.update(sourceColumn._id, { cardOrderIds: updatedSourceCardOrderIds })
+      await columnService.update(userId, sourceColumn._id, { cardOrderIds: updatedSourceCardOrderIds })
 
       // Thêm cardId vào target column tại vị trí mới
       const updatedTargetCardOrderIds = [...targetColumn.cardOrderIds]
       updatedTargetCardOrderIds.splice(newPosition, 0, card._id)
-      await columnService.update(targetColumn._id, { cardOrderIds: updatedTargetCardOrderIds })
+      await columnService.update(userId, targetColumn._id, { cardOrderIds: updatedTargetCardOrderIds })
 
       // Cập nhật columnId của card
-      await cardService.update(card._id, { columnId: targetColumn._id })
+      await cardService.update(userId, card._id, { columnId: targetColumn._id })
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -259,7 +259,7 @@ export const cardChatBotService = {
       }
 
       // Gọi service để copy card
-      await cardService.copyCard(card._id.toString(), copyCardData)
+      await cardService.copyCard(userId, card._id.toString(), copyCardData)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -291,6 +291,8 @@ export const cardChatBotService = {
       await chatBotService.saveChat(userId, boardId, message, response)
       return response
     } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error handling copy card command:', error)
       const response = 'Đã xảy ra lỗi khi xử lý yêu cầu sao chép thẻ.'
       await chatBotService.saveChat(userId, boardId, message, response)
       return response
@@ -472,12 +474,12 @@ export const cardChatBotService = {
         newCardData.priority = priority
       }
 
-      const newCard = await cardService.createNew(newCardData)
+      const newCard = await cardService.createNew(userId, newCardData)
 
       // Cập nhật cardOrderIds của column tại vị trí chỉ định
       const updatedCardOrderIds = [...targetColumn.cardOrderIds]
       updatedCardOrderIds.splice(newPosition, 0, newCard.insertedId)
-      await columnService.update(targetColumn._id, { cardOrderIds: updatedCardOrderIds })
+      await columnService.update(userId, targetColumn._id, { cardOrderIds: updatedCardOrderIds })
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -953,11 +955,11 @@ export const cardChatBotService = {
       // Nếu chọn cập nhật một card cụ thể
       if (specificCardIndex >= 0 && specificCardIndex < matchingCards.length) {
         // Chỉ cập nhật card được chỉ định
-        await cardService.update(matchingCards[specificCardIndex]._id.toString(), updateData)
+        await cardService.update(userId, matchingCards[specificCardIndex]._id.toString(), updateData)
       } else {
         // Cập nhật tất cả card hoặc card duy nhất
         for (const card of matchingCards) {
-          await cardService.update(card._id.toString(), updateData)
+          await cardService.update(userId, card._id.toString(), updateData)
         }
       }
 

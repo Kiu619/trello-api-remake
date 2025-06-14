@@ -7,6 +7,7 @@ import { columnModel } from './columnModel'
 import { cardModel } from './cardModel'
 import { userModel } from './userModel'
 import { activityService } from '~/services/activityService'
+import { labelModel } from './labelModel'
 
 // Define Collection (name & schema)
 export const BOARD_COLLECTION_NAME = 'boards'
@@ -115,6 +116,14 @@ const getDetails = async (userId, boardId) => {
           foreignField: '_id',
           as: 'members',
           pipeline: [{ $project: { 'password': 0, 'verifyToken': 0 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: labelModel.LABEL_COLLECTION_NAME,
+          localField: '_id',
+          foreignField: 'boardId',
+          as: 'labels'
         }
       }
     ]).toArray()

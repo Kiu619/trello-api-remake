@@ -318,7 +318,7 @@ export const columnChatBotService = {
       }
 
       // Gọi service để sao chép cột
-      const newColumn = await columnService.copyColumn(sourceColumn._id.toString(), copyColumnData)
+      const newColumn = await columnService.copyColumn(userId, sourceColumn._id.toString(), copyColumnData)
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)
@@ -456,7 +456,7 @@ export const columnChatBotService = {
       }
 
       // Gọi service để di chuyển tất cả thẻ sang cột mới
-      await columnService.moveAllCardsToAnotherColumn(sourceColumn._id.toString(), targetColumn._id.toString())
+      await columnService.moveAllCardsToAnotherColumn(userId, sourceColumn._id.toString(), targetColumn._id.toString())
 
       // Phát sự kiện batch để cập nhật UI
       emitBatchEvent(boardId)

@@ -8,7 +8,8 @@ import { BOARD_COLLECTION_NAME } from './boardModel'
 import { CHECKLIST_SCHEMA, checkListInCardModel } from './checkListInCardModel'
 import { COLUMN_COLLECTION_NAME } from './columnModel'
 import { DUEDATE_SCHEMA } from './dueDateModel'
-
+import { activityService } from '~/services/activityService'
+import { labelModel } from './labelModel'
 // Define Comment Schema
 const COMMENT_SCHEMA = Joi.object({
   userId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -46,7 +47,7 @@ const CARD_COLLECTION_SCHEMA = Joi.object({
     isComplete: false
   }),
 
-
+  labelIds: Joi.array().items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)).default([]),
   attachments: Joi.array().items(ATTACHMENT_SCHEMA).default([]),
   comments: Joi.array().items(COMMENT_SCHEMA).default([]),
   checklists: Joi.array().items(CHECKLIST_SCHEMA).default([]),
@@ -65,7 +66,7 @@ const validateBeforeCreate = async (data) => {
   return await CARD_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createNew = async (data) => {
+const createNew = async (userId, data) => {
   try {
     const validData = await validateBeforeCreate(data)
     const newCardToAdd = {
@@ -74,6 +75,22 @@ const createNew = async (data) => {
       columnId: new ObjectId(validData.columnId)
     }
     const newCard = await GET_DB().collection(CARD_COLLECTION_NAME).insertOne(newCardToAdd)
+
+    // Tạo activity
+    const columnInfo = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(validData.columnId) })
+
+    await activityService.createActivity({
+      userId,
+      type: 'createCard',
+      cardId: newCard.insertedId.toString(),
+      boardId: validData.boardId,
+      columnId: validData.columnId,
+      data: {
+        cardTitle: validData.title,
+        columnTitle: columnInfo.title
+      }
+    })
+
     return newCard
   } catch (error) {
     throw new Error(error)
@@ -82,20 +99,17 @@ const createNew = async (data) => {
 
 const getDetails = async (userId, cardId) => {
   try {
-    const queryConditions = [
-      { _id: new ObjectId(cardId), _destroy: false },
-      {
-        $or: [
-          // { ownerIds: { $all: [new ObjectId(userId)] } },
-          { memberIds: { $all: [new ObjectId(userId)] } }
-        ]
-      }
-    ]
-
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).aggregate([
-      { $match: { $and: queryConditions } }])
-      .toArray()
-
+      { $match: { _id: new ObjectId(cardId), _destroy: false } },
+      {
+        $lookup: {
+          from: 'labels',
+          localField: 'labelIds',
+          foreignField: '_id',
+          as: 'labelDetails'
+        }
+      }
+    ]).toArray()
     return result[0]
 
   } catch (error) {
@@ -130,7 +144,7 @@ const findOneById = async (id) => {
   }
 }
 
-const update = async (cardId, updateData) => {
+const update = async (userId, cardId, updateData) => {
   try {
     // Loại bỏ các trường không được phép update
     Object.keys(updateData).forEach(key => {
@@ -139,6 +153,12 @@ const update = async (cardId, updateData) => {
       }
     })
 
+    let oldCardTitle
+    if (updateData.title) {
+      const oldCard = await findOneById(cardId)
+      oldCardTitle = oldCard.title
+    }
+
     if (updateData.columnId) updateData.columnId = new ObjectId(updateData.columnId)
 
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
@@ -146,6 +166,119 @@ const update = async (cardId, updateData) => {
       { $set: updateData },
       { returnDocument: 'after' }
     )
+
+    if (updateData.cover) {
+      activityService.createActivity({
+        userId,
+        type: 'updateCardCover',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+    if (updateData.title) {
+      activityService.createActivity({
+        userId,
+        type: 'renameCard',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          newCardTitle: result.title,
+          oldCardTitle: oldCardTitle
+        }
+      })
+    }
+    if (updateData.description) {
+      activityService.createActivity({
+        userId,
+        type: 'updateCardDescription',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title,
+        }
+      })
+    }
+
+    if (updateData.dueDate) {
+      if (!updateData.dueDate.dueDate) {
+        activityService.createActivity({
+          userId,
+          type: 'removeDueDate',
+          cardId: cardId,
+          boardId: result.boardId.toString(),
+          data: {
+            cardTitle: result.title
+          }
+        })
+      } else {
+        activityService.createActivity({
+          userId,
+          type: 'setDueDate',
+          cardId: cardId,
+          boardId: result.boardId.toString(),
+          data: {
+            cardTitle: result.title,
+            dueDate: updateData.dueDate.dueDate,
+            dueDateTime: updateData.dueDate.dueDateTime
+          }
+        })
+      }
+    }
+
+    if (updateData.location) {
+      if (updateData.location.name) {
+        activityService.createActivity({
+          userId,
+          type: 'updateCardLocation',
+          cardId: cardId,
+          boardId: result.boardId.toString(),
+          data: {
+            cardTitle: result.title,
+            location: updateData.location.name
+          }
+        })
+      }
+    }
+    if (updateData.location === null) {
+      activityService.createActivity({
+        userId,
+        type: 'removeCardLocation',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+
+    if (updateData.isClosed === true) {
+      activityService.createActivity({
+        userId,
+        type: 'closeCard',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+    if (updateData.isClosed === false) {
+      activityService.createActivity({
+        userId,
+        type: 'openCard',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+
+
+
     return result
   } catch (error) {
     throw new Error(error)
@@ -208,12 +341,9 @@ const deleteAllCardByColumnId = async (columnId) => {
 */
 const unshiftNewComment = async (cardId, newComment) => {
   try {
-    const commentId = new ObjectId()
-    const commentWithId = { ...newComment, _id: commentId }
-
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
-      { $push: { comments: { $each: [commentWithId], $position: 0 } } },
+      { $push: { comments: { $each: [newComment], $position: 0 } } },
       { returnDocument: 'after' }
     )
     return result
@@ -261,7 +391,7 @@ const deleteComment = async (cardId, commentId) => {
   }
 }
 
-const updateMember = async (cardId, incomingMemberInfo) => {
+const updateMember = async (userId, cardId, incomingMemberInfo) => {
   try {
     let updateCondition = {}
     if (incomingMemberInfo.action === CARD_MEMBER_ACTIONS.ADD) {
@@ -279,15 +409,27 @@ const updateMember = async (cardId, incomingMemberInfo) => {
       updateCondition,
       { returnDocument: 'after' }
     )
+
+    activityService.createActivity({
+      userId: incomingMemberInfo.userId,
+      type: 'updateCardMembers',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        joinType: incomingMemberInfo.action === CARD_MEMBER_ACTIONS.ADD ? 'join' : 'leave'
+      }
+    })
+
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const addAttachment = async (cardId, attachmentFile) => {
+const addAttachment = async (userId, cardId, attachmentFile) => {
   try {
-    const result = await attachmantInCardModel.addAttachment(cardId, attachmentFile)
+    const result = await attachmantInCardModel.addAttachment(userId, cardId, attachmentFile)
     return result
   }
   catch (error) {
@@ -295,14 +437,14 @@ const addAttachment = async (cardId, attachmentFile) => {
   }
 }
 
-const editAttachment = async (cardId, attachmentData) => {
+const editAttachment = async (userId, cardId, attachmentData) => {
   try {
     let result = null
     if (attachmentData.action === 'EDIT') {
-      result = attachmantInCardModel.editAttachment(cardId, attachmentData)
+      result = attachmantInCardModel.editAttachment(userId, cardId, attachmentData)
     }
     else if (attachmentData.action === 'DELETE') {
-      result = attachmantInCardModel.deleteAttachment(cardId, attachmentData._id)
+      result = attachmantInCardModel.deleteAttachment(userId, cardId, attachmentData._id)
     }
     else {
       throw new Error('Invalid action')
@@ -314,17 +456,17 @@ const editAttachment = async (cardId, attachmentData) => {
   }
 }
 
-const updateChecklist = async (cardId, incomingChecklistInfo) => {
+const updateChecklist = async (userId, cardId, incomingChecklistInfo) => {
   try {
     let result = null
     if (incomingChecklistInfo.action === 'ADD') {
-      result = checkListInCardModel.addChecklistInCard(cardId, incomingChecklistInfo)
+      result = checkListInCardModel.addChecklistInCard(userId, cardId, incomingChecklistInfo)
     }
     else if (incomingChecklistInfo.action === 'UPDATE') {
-      result = checkListInCardModel.updateChecklistInCard(cardId, incomingChecklistInfo)
+      result = checkListInCardModel.updateChecklistInCard(userId, cardId, incomingChecklistInfo)
     }
     else if (incomingChecklistInfo.action === 'DELETE') {
-      result = checkListInCardModel.deleteChecklistInCard(cardId, incomingChecklistInfo.checklistId)
+      result = checkListInCardModel.deleteChecklistInCard(userId, cardId, incomingChecklistInfo.checklistId)
     }
     else {
       throw new Error('Invalid action')
@@ -336,42 +478,31 @@ const updateChecklist = async (cardId, incomingChecklistInfo) => {
   }
 }
 
-const updateChecklistItem = async (cardId, incomingChecklistInfo) => {
+const updateChecklistItem = async (userId, cardId, incomingChecklistInfo) => {
   try {
     let result = null
     if (incomingChecklistInfo.action === 'ADD') {
-      result = checkListInCardModel.addChecklistItem(cardId, incomingChecklistInfo)
+      result = checkListInCardModel.addChecklistItem(userId, cardId, incomingChecklistInfo)
     }
     else if (incomingChecklistInfo.action === 'UPDATE') {
-      result = checkListInCardModel.updateChecklistItem(cardId, incomingChecklistInfo)
+      result = await checkListInCardModel.updateChecklistItem(userId, cardId, incomingChecklistInfo)
     }
     else if (incomingChecklistInfo.action === 'DELETE') {
-      result = checkListInCardModel.deleteChecklistItem(cardId, incomingChecklistInfo)
+      result = checkListInCardModel.deleteChecklistItem(userId, cardId, incomingChecklistInfo)
     }
     else {
       throw new Error('Invalid action')
     }
 
+    // console.log('result', result)
+
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const updateLocation = async (cardId, locationInfo) => {
-  try {
-    const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
-      { _id: new ObjectId(cardId) },
-      { $set: { location: locationInfo } },
-      { returnDocument: 'after' }
-    )
-    return result
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
-const moveCardToDifferentBoard = async (cardId, currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition) => {
+const moveCardToDifferentBoard = async (userId, cardId, currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition) => {
   try {
     // Validate input data
     if (!ObjectId.isValid(cardId) || !ObjectId.isValid(currentBoardId) || !ObjectId.isValid(currentColumnId) || !ObjectId.isValid(newBoardId) || !ObjectId.isValid(newColumnId)) {
@@ -381,7 +512,19 @@ const moveCardToDifferentBoard = async (cardId, currentBoardId, currentColumnId,
     // Fetch the card
     const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
     if (!card) {
-      throw new Error('Card not found')
+      throw new Error('Card not foundee')
+    }
+
+    // Fetch the current board
+    const currentBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(currentBoardId) })
+    if (!currentBoard) {
+      throw new Error('Current board not found')
+    }
+
+    // Fetch the current column
+    const currentColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(currentColumnId) })
+    if (!currentColumn) {
+      throw new Error('Current column not found')
     }
 
     // Fetch the new board
@@ -397,6 +540,32 @@ const moveCardToDifferentBoard = async (cardId, currentBoardId, currentColumnId,
         ...card.memberIds.filter(memberId => newBoard.memberIds.map(id => id.toString()).includes(memberId.toString()))
       ])
     ]
+
+    // Xử lý labels khi di chuyển card sang board khác
+    let updatedLabelIds = []
+    if (card.labelIds && Array.isArray(card.labelIds) && card.labelIds.length > 0) {
+      if (currentBoardId !== newBoardId) {
+        // Tạo labels mới cho board đích
+        const newLabels = await Promise.all(card.labelIds.map(async labelId => {
+          const label = await labelModel.findOneById(labelId)
+          if (label) {
+            const newLabelId = await labelModel.createNew({
+              boardId: newBoardId,
+              title: label.title,
+              color: label.color
+            })
+            return newLabelId // labelModel.createNew trả về insertedId
+          }
+          return null
+        }))
+        
+        // Lọc bỏ các giá trị null
+        updatedLabelIds = newLabels.filter(labelId => labelId !== null)
+      } else {
+        // Nếu cùng board thì giữ nguyên labelIds
+        updatedLabelIds = card.labelIds
+      }
+    }
 
     // Remove members from checklist items that are not in the new card's memberIds
     const updatedChecklists = card.checklists.map(checklist => {
@@ -434,6 +603,7 @@ const moveCardToDifferentBoard = async (cardId, currentBoardId, currentColumnId,
       columnId: new ObjectId(newColumnId),
       memberIds: updatedMemberIds,
       checklists: updatedChecklists,
+      labelIds: updatedLabelIds,
       updatedAt: new Date()
     }
 
@@ -443,17 +613,51 @@ const moveCardToDifferentBoard = async (cardId, currentBoardId, currentColumnId,
       { $set: updatedCard },
       { returnDocument: 'after' }
     )
+
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'moveCardToDifferentBoard',
+      cardId: cardId,
+      boardId: currentBoardId,
+      data: {
+        cardTitle: card.title,
+        destinationBoardId: newBoardId,
+        destinationBoardTitle: newBoard.title,
+        sourceColumnTitle: currentColumn.title,
+        destinationColumnTitle: newColumn.title
+      }
+    })
+
+    await activityService.createActivity({
+      userId,
+      type: 'cardMovedFromDifferentBoard',
+      cardId: cardId,
+      boardId: newBoardId,
+      data: {
+        cardTitle: card.title,
+        sourceBoardId: currentBoardId,
+        sourceBoardTitle: currentBoard.title,
+        sourceColumnTitle: currentColumn.title,
+        destinationColumnTitle: newColumn.title
+      }
+    })
+
     return result.value
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const copyCard = async (cardId, currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition, title, keepingItems) => {
+const copyCard = async (userId, cardId, currentBoardId, currentColumnId, newBoardId, newColumnId, newPosition, title, keepingItems) => {
   try {
 
     // Fetch the original card details
     const originalCard = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const originalColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(currentColumnId) })
+    const originalBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(currentBoardId) })
+    const destinationBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(newBoardId) })
+
     if (!originalCard) {
       throw new Error('Card not found')
     }
@@ -484,6 +688,33 @@ const copyCard = async (cardId, currentBoardId, currentColumnId, newBoardId, new
       }
     })
 
+    // Trường hợp nếu currentBoardId != newBoardId thì tạo mới label cho board mới và copy các dữ liệu từ label từ board cũ trừ labelid
+    if (keepingItems.includes('labels')) {
+      // Kiểm tra xem originalCard có labelIds và labelIds là mảng không rỗng
+      if (originalCard.labelIds && Array.isArray(originalCard.labelIds) && originalCard.labelIds.length > 0) {
+        if (currentBoardId !== newBoardId) {
+          const newLabels = await Promise.all(originalCard.labelIds.map(async labelId => {
+            const label = await labelModel.findOneById(labelId)
+            if (label) {
+              const newLabelId = await labelModel.createNew({
+                boardId: newBoardId,
+                title: label.title,
+                color: label.color
+              })
+              return newLabelId // labelModel.createNew trả về insertedId
+            }
+            return null
+          }))
+          // Lọc bỏ các giá trị null và gán vào newCard.labelIds
+          newCard.labelIds = newLabels.filter(labelId => labelId !== null)
+        } else {
+          newCard.labelIds = originalCard.labelIds
+        }
+      } else {
+        // Nếu không có labelIds hoặc labelIds rỗng, gán mảng rỗng
+        newCard.labelIds = []
+      }
+    }
     // If keepingItems includes memberIds, update memberIds to include ownerIds from the new board and only include members that are also in the new board's memberIds
     if (keepingItems.includes('memberIds')) {
       const newBoard = await GET_DB().collection(BOARD_COLLECTION_NAME).findOne({ _id: new ObjectId(newBoardId) })
@@ -527,6 +758,52 @@ const copyCard = async (cardId, currentBoardId, currentColumnId, newBoardId, new
       { $set: { cardOrderIds: updatedCardOrderIds } }
     )
 
+    // Tạo activity
+    if (currentBoardId === newBoardId) {
+      await activityService.createActivity({
+        userId,
+        type: 'copyCardToSameBoard',
+        cardId: cardId.toString(),
+        boardId: currentBoardId.toString(),
+        data: {
+          oldCardTitle: originalCard.title,
+          newCardTitle: title,
+          sourceColumnTitle: originalColumn.title,
+          destinationColumnTitle: newColumnData.title
+        }
+      })
+    } else {
+      await activityService.createActivity({
+        userId,
+        type: 'copyCardToAnotherBoard',
+        cardId: cardId.toString(),
+        boardId: currentBoardId.toString(),
+        data: {
+          destinationBoardId: newBoardId.toString(),
+          destinationBoardTitle: destinationBoard.title,
+          sourceColumnTitle: originalColumn.title,
+          destinationColumnTitle: newColumnData.title,
+          oldCardTitle: originalCard.title,
+          newCardTitle: title
+        }
+      })
+
+      await activityService.createActivity({
+        userId,
+        type: 'copyCardFromAnotherBoard',
+        cardId: cardId.toString(),
+        boardId: newBoardId.toString(),
+        data: {
+          sourceBoardId: currentBoardId.toString(),
+          sourceBoardTitle: originalBoard.title,
+          sourceColumnTitle: originalColumn.title,
+          destinationColumnTitle: newColumnData.title,
+          oldCardTitle: originalCard.title,
+          newCardTitle: title
+        }
+      })
+    }
+
     return result
   } catch (error) {
     throw new Error(error)
@@ -551,6 +828,18 @@ const deleteCardsByBoardId = async (boardId) => {
   }
 }
 
+const updateLabel = async (userId, cardId, labelIds) => {
+  try {
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(cardId) },
+      { $set: { labelIds: labelIds.map(id => new ObjectId(id)) } },
+      { returnDocument: 'after' }
+    )
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 
 export const cardModel = {
   CARD_COLLECTION_NAME,
@@ -558,6 +847,6 @@ export const cardModel = {
   createNew, getDetails, findOneByTitle,
   findOneById, update, removeMemberFromCard, deleteAllCardByColumnId,
   unshiftNewComment, updateComment, deleteComment, updateMember, updateChecklist, updateChecklistItem,
-  addAttachment, editAttachment, updateLocation, moveCardToDifferentBoard,
-  copyCard, deleteCardById, deleteCardsByBoardId,
+  addAttachment, editAttachment, moveCardToDifferentBoard,
+  copyCard, deleteCardById, deleteCardsByBoardId, updateLabel
 }

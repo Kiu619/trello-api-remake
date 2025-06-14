@@ -197,7 +197,7 @@ const checkCommandFormat = (message, command) => {
   return { isValid: true, message: '' }
 }
 
-// Hàm mới: Sử dụng OpenAI để phân tích ý định và trích xuất thông tin từ lệnh
+// Sử dụng OpenAI để phân tích ý định và trích xuất thông tin từ lệnh
 async function analyzeUserIntent(message, userId, boardId, conversationHistory) {
   try {
     // Tạo prompt chứa thông tin về lịch sử trò chuyện gần nhất (nếu có)

@@ -5,6 +5,7 @@ import { GET_DB } from '~/config/mongodb'
 import { CARD_COLLECTION_NAME } from '~/models/cardModel'
 import { BrevoProvider } from '~/providers/BrevoProvider'
 import { env } from '~/config/environment'
+import { activityService } from '~/services/activityService'
 
 export const CHECKLIST_ITEM_SCHEMA = Joi.object({
   _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -19,8 +20,19 @@ export const CHECKLIST_SCHEMA = Joi.object({
   items: Joi.array().items(CHECKLIST_ITEM_SCHEMA).default([])
 })
 
+const getChecklistById = (card, checklistId) => {
+  return card.checklists.find(checklist =>
+    checklist._id.toString() === checklistId.toString()
+  )
+}
 
-const addChecklistInCard = async (cardId, checklist) => {
+const getChecklistItemById = (checklist, itemId) => {
+  return checklist.items.find(item =>
+    item._id.toString() === itemId.toString()
+  )
+}
+
+const addChecklistInCard = async (userId, cardId, checklist) => {
   try {
     const checklistId = new ObjectId()
     const title = checklist.title
@@ -31,15 +43,29 @@ const addChecklistInCard = async (cardId, checklist) => {
       { $push: { checklists: checklistWithId } },
       { returnDocument: 'after' }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'createChecklist',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        checklistTitle: title
+      }
+    })
+
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const updateChecklistInCard = async (cardId, updatedChecklist) => {
+const updateChecklistInCard = async (userId, cardId, updatedChecklist) => {
   try {
     const _id = updatedChecklist.checklistId
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const oldChecklist = getChecklistById(card, _id)
     const items = updatedChecklist.items.map(item => ({
       ...item,
       _id: new ObjectId(item._id)
@@ -51,30 +77,57 @@ const updateChecklistInCard = async (cardId, updatedChecklist) => {
       { $set: { 'checklists.$': { items, title, _id: new ObjectId(_id) } } },
       { returnDocument: 'after' }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'updateChecklist',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        newChecklistTitle: title,
+        oldChecklistTitle: oldChecklist.title
+      }
+    })
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const deleteChecklistInCard = async (cardId, checklistId) => {
+const deleteChecklistInCard = async (userId, cardId, checklistId) => {
   try {
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const checklist = getChecklistById(card, checklistId)
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
       { $pull: { checklists: { _id: new ObjectId(checklistId) } } },
       { returnDocument: 'after' }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'deleteChecklist',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        checklistTitle: checklist.title
+      }
+    })
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const addChecklistItem = async (cardId, item) => {
+const addChecklistItem = async (userId, cardId, item) => {
   try {
     const itemId = new ObjectId()
     const title = item.title
     const checklistId = item.checklistId
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const checklist = getChecklistById(card, checklistId)
     const itemWithId = { title, _id: itemId, isChecked: false, assignedTo: [] }
 
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
@@ -82,22 +135,38 @@ const addChecklistItem = async (cardId, item) => {
       { $push: { 'checklists.$.items': itemWithId } },
       { returnDocument: 'after' }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'addChecklistItem',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        checklistTitle: checklist.title,
+        checklistItemTitle: title
+      }
+    })
+
     return result
   } catch (error) {
     throw new Error(error)
   }
 }
 
-const updateChecklistItem = async (cardId, item) => {
+const updateChecklistItem = async (userId, cardId, item) => {
   try {
     const checklistId = item.checklistId
     const itemId = item.itemId
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const checklist = getChecklistById(card, checklistId)
+    const oldChecklistItem = getChecklistItemById(checklist, itemId)
     const title = item.title
     const isChecked = item.isChecked
     const assignedTo = item.assignedTo
     const updatedItem = { title, _id: new ObjectId(itemId), isChecked, assignedTo }
 
-    // Nếu có trường assignMember = true thì gửi email thông báo (viết code chán thật sự, thật ra phải viết ở service)
+    // // Nếu có trường assignMember = true thì gửi email thông báo (viết code chán thật sự, thật ra phải viết ở service)
     if (item.assignMember) {
       const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
       // Gửi email thông báo
@@ -120,6 +189,19 @@ const updateChecklistItem = async (cardId, item) => {
         returnDocument: 'after'
       }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'updateChecklistItem',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        checklistTitle: checklist.title,
+        oldChecklistItemTitle: oldChecklistItem.title,
+        newChecklistItemTitle: title
+      }
+    })
     return result
   } catch (error) {
     throw new Error(error)
@@ -127,16 +209,29 @@ const updateChecklistItem = async (cardId, item) => {
 }
 
 
-const deleteChecklistItem = async (cardId, item) => {
+const deleteChecklistItem = async (userId, cardId, item) => {
   try {
     const checklistId = item.checklistId
     const itemId = item.itemId
-
+    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const checklist = getChecklistById(card, checklistId)
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId), 'checklists._id': new ObjectId(checklistId) },
       { $pull: { 'checklists.$.items': { _id: new ObjectId(itemId) } } },
       { returnDocument: 'after' }
     )
+
+    await activityService.createActivity({
+      userId,
+      type: 'deleteChecklistItem',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        checklistTitle: checklist.title,
+        checklistItemTitle: item.title
+      }
+    })
     return result
   } catch (error) {
     throw new Error(error)
