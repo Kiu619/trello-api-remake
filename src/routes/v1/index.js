@@ -9,6 +9,7 @@ import { templateRoutes } from './templateRoute'
 import { chatBotRoute } from './chatBotRoute'
 import { activityRoutes } from './activityRoute'
 import { labelRoute } from './labelRoute'
+import { googleDriveRoute } from './googleDriveRoute'
 
 const Router = express.Router()
 
@@ -39,5 +40,8 @@ Router.use('/activity', activityRoutes)
 
 // Label API
 Router.use('/label', labelRoute)
+
+// Google Drive API
+Router.use('/google-drive', googleDriveRoute)
 
 export const APIs_V1 = Router

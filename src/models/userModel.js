@@ -239,6 +239,67 @@ const getUsers = async (queryFilter) => {
   }
 }
 
+// Thêm function để lưu Google Drive tokens
+const saveGoogleDriveTokens = async (userId, tokens) => {
+  try {
+    const updateData = {
+      'googleDrive.isConnected': true,
+      'googleDrive.accessToken': tokens.access_token,
+      'googleDrive.refreshToken': tokens.refresh_token,
+      'googleDrive.tokenExpiry': tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      'googleDrive.connectedAt': new Date()
+    }
+
+    const result = await GET_DB().collection(USER_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(userId) },
+      { $set: updateData },
+      { returnDocument: 'after' }
+    )
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Function để lấy Google Drive tokens
+const getGoogleDriveTokens = async (userId) => {
+  try {
+    const user = await GET_DB().collection(USER_COLLECTION_NAME).findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { googleDrive: 1 } }
+    )
+
+    return user?.googleDrive || null
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Function để xóa Google Drive connection
+const disconnectGoogleDrive = async (userId) => {
+  try {
+    const updateData = {
+      'googleDrive.isConnected': false,
+      'googleDrive.accessToken': null,
+      'googleDrive.refreshToken': null,
+      'googleDrive.tokenExpiry': null,
+      'googleDrive.connectedAt': null
+    }
+
+    const result = await GET_DB().collection(USER_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(userId) },
+      { $set: updateData },
+      { returnDocument: 'after' }
+    )
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+
 export const userModel = {
   USER_ROLES,
   USER_COLLECTION_NAME,
@@ -247,5 +308,8 @@ export const userModel = {
   findOneByEmail,
   update, getStarredBoards, getRecentBoards,
   findTwoFAKeyByUserId, generateTwoFAKey, findSessionByDeviceId,
-  insertSession, updateSession, getUsers
+  insertSession, updateSession, getUsers,
+  saveGoogleDriveTokens,
+  getGoogleDriveTokens,
+  disconnectGoogleDrive
 }

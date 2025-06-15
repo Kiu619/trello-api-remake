@@ -9,10 +9,32 @@ import { activityService } from '~/services/activityService'
 export const ATTACHMENT_SCHEMA = Joi.object({
   _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
   url: Joi.string().uri().required(),
-  filename: Joi.string().required(),
-  fileType: Joi.string().required(), // New field for file type
+  fileName: Joi.string().required(),
+  fileType: Joi.string().required(),
   uploadedAt: Joi.date().timestamp()
 })
+
+// Thêm schema cho Google Drive attachment
+export const GOOGLE_DRIVE_ATTACHMENT_SCHEMA = Joi.object({
+  _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
+  type: Joi.string().valid('google_drive').required(),
+  fileId: Joi.string().required(), // Google Drive file ID
+  fileName: Joi.string().required(),
+  fileSize: Joi.number().optional(),
+  mimeType: Joi.string().required(),
+  webViewLink: Joi.string().uri().required(),
+  webContentLink: Joi.string().uri().optional(),
+  thumbnailLink: Joi.string().uri().optional(),
+  iconLink: Joi.string().uri().optional(),
+  createdAt: Joi.date().timestamp().default(Date.now),
+  addedBy: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE).required()
+})
+
+// Cập nhật ATTACHMENT_SCHEMA để hỗ trợ cả file upload và Google Drive
+export const UPDATED_ATTACHMENT_SCHEMA = Joi.alternatives().try(
+  ATTACHMENT_SCHEMA, // Schema cũ cho file upload
+  GOOGLE_DRIVE_ATTACHMENT_SCHEMA // Schema mới cho Google Drive
+)
 
 const getAttachmentById = (card, attachmentId) => {
   return card.attachments.find(attachment =>
@@ -30,7 +52,7 @@ const addAttachment = async (userId, cardId, attachmentFile) => {
     const attachment = {
       _id: attachmentId,
       url: uploadResult.secure_url,
-      filename: attachmentFile.originalname,
+      fileName: attachmentFile.originalname,
       fileType: fileType,
       uploadedAt: Date.now()
     }
@@ -48,7 +70,7 @@ const addAttachment = async (userId, cardId, attachmentFile) => {
       boardId: result.boardId.toString(),
       data: {
         cardTitle: result.title,
-        attachmentName: attachment.filename
+        attachmentName: attachment.fileName
       }
     })
 
@@ -64,10 +86,10 @@ const editAttachment = async (userId, cardId, attachmentData) => {
     const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId), 'attachments._id': new ObjectId(_id) })
     const oldAttachment = getAttachmentById(card, _id)
     const url = attachmentData.url
-    const filename = attachmentData.filename
+    const fileName = attachmentData.fileName
     const fileType = attachmentData.fileType
     const uploadedAt = attachmentData.uploadedAt
-    const updateData = { _id, url, filename, fileType, uploadedAt }
+    const updateData = { _id, url, fileName, fileType, uploadedAt }
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId), 'attachments._id': _id },
       { $set: { 'attachments.$': updateData } },
@@ -81,8 +103,8 @@ const editAttachment = async (userId, cardId, attachmentData) => {
       boardId: result.boardId.toString(),
       data: {
         cardTitle: result.title,
-        attachmentName: oldAttachment.filename,
-        newAttachmentName: updateData.filename
+        attachmentName: oldAttachment.fileName,
+        newAttachmentName: updateData.fileName
       }
     })
     return result
@@ -108,7 +130,7 @@ const deleteAttachment = async (userId, cardId, attachmentId) => {
       boardId: result.boardId.toString(),
       data: {
         cardTitle: result.title,
-        attachmentName: attachment.filename
+        attachmentName: attachment.fileName
       }
     })
     return result
@@ -117,6 +139,49 @@ const deleteAttachment = async (userId, cardId, attachmentId) => {
   }
 }
 
+// Thêm function để attach Google Drive file
+const attachGoogleDriveFile = async (userId, cardId, googleDriveFileData) => {
+  try {
+    const newAttachment = {
+      _id: new ObjectId(),
+      fileType: 'google_drive',
+      fileId: googleDriveFileData.id,
+      fileName: googleDriveFileData.name,
+      fileSize: googleDriveFileData.size ? parseInt(googleDriveFileData.size) : null,
+      mimeType: googleDriveFileData.mimeType,
+      webViewLink: googleDriveFileData.webViewLink,
+      webContentLink: googleDriveFileData.webContentLink,
+      thumbnailLink: googleDriveFileData.thumbnailLink,
+      iconLink: googleDriveFileData.iconLink,
+      createdAt: new Date(),
+      addedBy: new ObjectId(userId)
+    }
+
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(cardId) },
+      { $push: { attachments: newAttachment } },
+      { returnDocument: 'after' }
+    )
+
+    // Tạo activity
+    await activityService.createActivity({
+      userId,
+      type: 'attachGoogleDriveFile',
+      cardId: cardId,
+      boardId: result.boardId.toString(),
+      data: {
+        cardTitle: result.title,
+        fileName: googleDriveFileData.name,
+        fileType: 'Google Drive'
+      }
+    })
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const attachmantInCardModel = {
-  addAttachment, editAttachment, deleteAttachment
+  addAttachment, editAttachment, deleteAttachment, attachGoogleDriveFile
 }

@@ -39,6 +39,7 @@ export const ACTIVITY_TYPES = {
   ADD_ATTACHMENT: 'addAttachment',
   EDIT_ATTACHMENT: 'editAttachment',
   DELETE_ATTACHMENT: 'deleteAttachment',
+  ATTACH_GOOGLE_DRIVE_FILE: 'attachGoogleDriveFile',
 
   CREATE_CHECKLIST: 'createChecklist',
   UPDATE_CHECKLIST: 'updateChecklist',
@@ -120,6 +121,8 @@ const ACTIVITY_COLLECTION_SCHEMA = Joi.object({
     // Thông tin về attachment
     attachmentName: Joi.string(),
     newAttachmentName: Joi.string(),
+    fileName: Joi.string(),
+    fileType: Joi.string(),
 
     // Thông tin về checklist
     checklistTitle: Joi.string(),
