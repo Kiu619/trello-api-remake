@@ -4,9 +4,10 @@ import { chatBotHistoryModel } from '~/models/chatBotHistoryModel'
 import { cardChatBotService } from '~/services/cardChatBotService'
 import { columnChatBotService } from '~/services/columnChatBotService'
 import { boardChatBotService } from '~/services/boardChatBotService'
+import { env } from '~/config/environment'
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: env.OPENAI_API_KEY
 })
 
 // Lấy tham chiếu đến io server từ server.js

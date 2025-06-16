@@ -8,6 +8,7 @@ import { env } from '~/config/environment'
 import { activityService } from '~/services/activityService'
 import { notificationService } from '~/services/notificationService'
 import { cardDueDateFlagModel } from './cardDueDateFlag'
+import { WEBSITE_DOMAIN } from '~/utils/constants'
 
 export const CHECKLIST_ITEM_SCHEMA = Joi.object({
   _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -179,13 +180,13 @@ const updateChecklistItem = async (userId, cardId, item) => {
       const customSubject = `You were assigned to a checklist item (${title}) in Card: ${card.title}`
       const htmlContent = `
         <p>You were assigned to a checklist item: <strong>${title}</strong> in checklist: <strong>${item.cardChecklist.title}</strong> in Card: <strong>${card.title}</strong></p>
-        <p>Click <a href="${env.WEBSITE_DOMAIN_DEV}/board/${item.board._id}/card/${cardId}">here</a> to view the card</p>
+        <p>Click <a href="${WEBSITE_DOMAIN}/board/${item.board._id}/card/${cardId}">here</a> to view the card</p>
       `
       await BrevoProvider.sendEmail(item.assignMember.email, customSubject, htmlContent)
     }
 
     if (item.dueDate) {
-      await cardDueDateFlagModel.createCardDueDateFlag(cardId, 'checklistItem')
+      await cardDueDateFlagModel.createCardDueDateFlag(cardId, 'checklistItem', checklistId, itemId)
     }
 
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
@@ -199,7 +200,6 @@ const updateChecklistItem = async (userId, cardId, item) => {
         returnDocument: 'after'
       }
     )
-
 
 
     // Tạo activity cho due date nếu có thay đổi
@@ -234,18 +234,46 @@ const updateChecklistItem = async (userId, cardId, item) => {
     //   }
     // }
 
-    await activityService.createActivity({
-      userId,
-      type: 'updateChecklistItem',
-      cardId: cardId,
-      boardId: result.boardId.toString(),
-      data: {
-        cardTitle: result.title,
-        checklistTitle: checklist.title,
-        oldChecklistItemTitle: oldChecklistItem.title,
-        newChecklistItemTitle: title
-      }
-    })
+    if (item.isChecked) {
+      await activityService.createActivity({
+        userId,
+        type: 'checkChecklistItem',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title,
+          checklistTitle: checklist.title,
+          checklistItemTitle: title
+        }
+      })
+    } else if (!item.isChecked) {
+      await activityService.createActivity({
+        userId,
+        type: 'uncheckChecklistItem',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title,
+          checklistTitle: checklist.title,
+          checklistItemTitle: title
+        }
+      })
+    } 
+
+    else {
+      await activityService.createActivity({
+        userId,
+        type: 'updateChecklistItem',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title,
+          checklistTitle: checklist.title,
+          oldChecklistItemTitle: oldChecklistItem.title,
+          newChecklistItemTitle: title
+        }
+      })
+    }
     return result
   } catch (error) {
     throw new Error(error)

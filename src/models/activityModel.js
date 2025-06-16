@@ -48,6 +48,10 @@ export const ACTIVITY_TYPES = {
   UPDATE_CHECKLIST_ITEM: 'updateChecklistItem',
   DELETE_CHECKLIST_ITEM: 'deleteChecklistItem',
 
+  ASSIGN_CHECKLIST_ITEM: 'assignChecklistItem',
+  CHECK_CHECKLIST_ITEM: 'checkChecklistItem',
+  UNCHECK_CHECKLIST_ITEM: 'uncheckChecklistItem',
+
   ADD_EDIT_COMMENT: 'addEditComment',
 
   REMOVE_DUE_DATE: 'removeDueDate',
@@ -58,6 +62,8 @@ export const ACTIVITY_TYPES = {
 
   CLOSE_CARD: 'closeCard',
   OPEN_CARD: 'openCard',
+  COMPLETE_CARD: 'completeCard',
+  UNCOMPLETE_CARD: 'uncompleteCard',
 
   DELETE_CARD: 'deleteCard',
 
@@ -249,6 +255,34 @@ const getActivitiesByUserId = async (userId, boardId) => {
   }
 }
 
+const getUserActivitiesInCard = async (userId, cardId) => {
+  try {
+    const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME).aggregate([
+      { $match: { userId: new ObjectId(userId), cardId: new ObjectId(cardId) } },
+      { $lookup: { from: USER_COLLECTION_NAME, localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $project: {
+        'user': {
+          _id: 1,
+          displayName: 1,
+          avatar: 1
+        },
+        'type': 1,
+        'data': 1,
+        'cardId': 1,
+        'columnId': 1,
+        'boardId': 1,
+        'createdAt': 1
+      } },
+      { $sort: { createdAt: -1 } }
+    ]).toArray()
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 const deleteActivityByDeleteComment = async (cardId, commentId) => {
   try {
     const result = await GET_DB().collection(ACTIVITY_COLLECTION_NAME).deleteOne({ cardId: new ObjectId(cardId), 'data.commentId': commentId })
@@ -263,5 +297,6 @@ export const activityModel = {
   getActivitiesByBoardId,
   getActivitiesByUserId,
   deleteActivityByDeleteComment,
-  getActivitiesByCardId
+  getActivitiesByCardId,
+  getUserActivitiesInCard
 }

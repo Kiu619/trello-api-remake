@@ -10,22 +10,34 @@ const validateBeforeCreate = async (data) => {
 
 const CARD_DUE_DATE_FLAG_COLLECTION_SCHEMA = Joi.object({
   cardId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
-  type: Joi.string().required().valid('card', 'checklistItem')
+  type: Joi.string().required().valid('card', 'checklistItem'),
+  checklistId: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE).optional(),
+  itemId: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE).optional()
 })
 
-const createCardDueDateFlag = async (cardId, type) => {
-  const validData = await validateBeforeCreate({ cardId, type })
+const createCardDueDateFlag = async (cardId, type, checklistId, itemId) => {
+  const validData = await validateBeforeCreate({ cardId, type, checklistId, itemId })
   // Sử dụng upsert: update nếu tồn tại, insert nếu chưa tồn tại
   const cardDueDateFlag = await GET_DB().collection(CARD_DUE_DATE_FLAG_COLLECTION_NAME).updateOne(
-    { cardId },
+    { cardId, type, checklistId, itemId },
     { $set: validData },
     { upsert: true }
   )
   return cardDueDateFlag
 }
 
-const deleteCardDueDateFlag = async (cardId) => {
-  const cardDueDateFlag = await GET_DB().collection(CARD_DUE_DATE_FLAG_COLLECTION_NAME).deleteOne({ cardId })
+const deleteCardDueDateFlag = async (cardId, checklistId = null, itemId = null) => {
+  let query = { cardId }
+
+  if (checklistId && itemId) {
+    // Xóa flag cho checklist item cụ thể
+    query = { cardId, type: 'checklistItem', checklistId, itemId }
+  } else {
+    // Xóa tất cả flag của card (bao gồm cả checklist items)
+    query = { cardId }
+  }
+
+  const cardDueDateFlag = await GET_DB().collection(CARD_DUE_DATE_FLAG_COLLECTION_NAME).deleteMany(query)
   return cardDueDateFlag
 }
 

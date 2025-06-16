@@ -11,6 +11,7 @@ import { GET_DB } from '~/config/mongodb'
 import { cardDueDateFlagModel } from '~/models/cardDueDateFlag'
 import moment from 'moment-timezone'
 import { boardModel } from '~/models/boardModel'
+import { ObjectId } from 'mongodb'
 
 let io
 
@@ -162,10 +163,14 @@ const updateBoardRequest = async (userId, notificationId, status) => {
   }
 }
 
-const sendDueDateNotification = async (cardId, type = 'card', itemId = null) => {
+const sendDueDateNotification = async (cardId, type = 'card', checklistId = null, itemId = null) => {
   try {
     const card = await cardModel.findOneById(cardId)
     if (!card) {
+      return
+    }
+
+    if (card.isCompleted) {
       return
     }
 
@@ -177,7 +182,8 @@ const sendDueDateNotification = async (cardId, type = 'card', itemId = null) => 
 
       const dueDate = card.dueDate.dueDate
       const dueDateTime = card.dueDate.dueDateTime
-      const assignedUsers = card.memberIds
+      // Nếu không có assignedUsers thì lấy tất cả members trong card
+      const assignedUsers = card.memberIds && card.memberIds.length > 0 ? card.memberIds : card.memberIds
 
       if (!dueDate || assignedUsers.length === 0) {
         return
@@ -230,10 +236,217 @@ const sendDueDateNotification = async (cardId, type = 'card', itemId = null) => 
       }
     }
 
+    // Chỉ xử lý phần checklist item sau
+    if (type === 'checklistItem') {
+      
+      if (!checklistId || !itemId) {
+        console.log('❌ Missing checklistId or itemId')
+        return
+      }
+
+      // Tìm checklist và item
+      const checklist = card.checklists.find(cl => cl._id.toString() === checklistId.toString())
+      if (!checklist) {
+        console.log('❌ Checklist not found:', checklistId)
+        return
+      }
+
+      const item = checklist.items.find(it => it._id.toString() === itemId.toString())
+      if (!item) {
+        console.log('❌ Checklist item not found:', itemId)
+        return
+      }
+
+      // Kiểm tra item đã completed chưa
+      if (item.isChecked) {
+        console.log('⏭️ Checklist item already completed')
+        return
+      }
+
+      if (!item.dueDate) {
+        console.log('❌ Checklist item has no due date')
+        return
+      }
+
+      // Nếu không có assignedTo thì lấy tất cả members trong card
+      const assignedUsers = item.assignedTo && item.assignedTo.length > 0 ? item.assignedTo : card.memberIds
+      
+      if (assignedUsers.length === 0) {
+        console.log('❌ No assigned users for checklist item and no card members')
+        return
+      }
+
+      // Tính toán thời gian còn lại cho checklist item
+      let dueDateVN
+      if (item.dueDateTime) {
+        const dateOnly = moment(item.dueDate).format('YYYY-MM-DD')
+        dueDateVN = moment.tz(`${dateOnly} ${item.dueDateTime}`, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh')
+      } else {
+        dueDateVN = moment.tz(item.dueDate, 'Asia/Ho_Chi_Minh').endOf('day')
+      }
+
+      const nowVN = moment.tz('Asia/Ho_Chi_Minh')
+      const hoursToDeadline = dueDateVN.diff(nowVN, 'hours', true)
+
+      console.log(`⏰ Checklist item - Hours to deadline: ${hoursToDeadline.toFixed(2)} hours`)
+
+      const notifications = item.notifications || {}
+      let shouldSendNotification = false
+      let notificationStatus = ''
+
+      // Logic tương tự như card
+      if (hoursToDeadline <= 12 && hoursToDeadline > 0 && !notifications.reminder12h) {
+        console.log('📧 Sending 12h reminder for checklist item...')
+        await sendChecklistItemNotificationEmails(assignedUsers, `Checklist item "${item.title}" sắp đến hạn`, card, checklist, item, 'upcoming_12h')
+        await sendChecklistItemNotificationInApp(assignedUsers, card, checklist, item, 'upcoming_12h')
+
+        // Cập nhật notifications cho item
+        item.notifications = { ...notifications, reminder12h: true, lastNotified: new Date() }
+        shouldSendNotification = true
+        notificationStatus = '12h reminder'
+      } else if (hoursToDeadline <= 0 && !notifications.overdue) {
+        console.log('🚨 Sending overdue notification for checklist item...')
+        await sendChecklistItemNotificationEmails(assignedUsers, `Checklist item "${item.title}" đã quá hạn`, card, checklist, item, 'overdue')
+        await sendChecklistItemNotificationInApp(assignedUsers, card, checklist, item, 'overdue')
+
+        // Cập nhật notifications cho item và xóa flag
+        item.notifications = { ...notifications, overdue: true, lastNotified: new Date() }
+        await cardDueDateFlagModel.deleteCardDueDateFlag(checklistId, itemId)
+        shouldSendNotification = true
+        notificationStatus = 'overdue'
+
+      } else {
+        console.log('⏳ No notification needed for checklist item or already sent')
+      }
+
+      // Cập nhật card với checklist item đã sửa đổi
+      if (shouldSendNotification) {
+        // Update the specific item in the checklist
+        await GET_DB().collection('cards').updateOne(
+          { 
+            _id: new ObjectId(cardId),
+            'checklists._id': new ObjectId(checklistId),
+            'checklists.items._id': new ObjectId(itemId)
+          },
+          { 
+            $set: { 
+              'checklists.$[checklist].items.$[item].notifications': item.notifications
+            }
+          },
+          {
+            arrayFilters: [
+              { 'checklist._id': new ObjectId(checklistId) },
+              { 'item._id': new ObjectId(itemId) }
+            ]
+          }
+        )
+        console.log(`✅ Updated checklist item notification status: ${notificationStatus}`)
+      }
+    }
+
   } catch (error) {
     console.error('❌ Error sending due date notification:', error)
   }
 }
+
+const sendChecklistItemNotificationEmails = async (userIds, title, card, checklist, item, status) => {
+  try {
+    for (const userId of userIds) {
+      const user = await userModel.findOneById(userId)
+      if (!user) continue
+
+      // Format thời gian theo timezone Việt Nam
+      let dueDateFormatted, dueTimeFormatted
+      if (item.dueDateTime) {
+        const dateOnly = moment(item.dueDate).format('YYYY-MM-DD')
+        const dueDateVN = moment.tz(`${dateOnly} ${item.dueDateTime}`, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh')
+        dueDateFormatted = dueDateVN.format('DD/MM/YYYY')
+        dueTimeFormatted = dueDateVN.format('HH:mm')
+      } else {
+        const dueDateVN = moment.tz(item.dueDate, 'Asia/Ho_Chi_Minh')
+        dueDateFormatted = dueDateVN.format('DD/MM/YYYY')
+        dueTimeFormatted = ''
+      }
+
+      let subject = ''
+      let htmlContent = ''
+
+      if (status === 'upcoming_12h') {
+        subject = `⏰ Reminder: ${title} (12 hours left)`
+        htmlContent = `
+          <h2>🔔 Upcoming deadline notification (12 hours) - Checklist Item</h2>
+          <p><strong>${title}</strong></p>
+          <p><strong>Deadline:</strong> ${dueDateFormatted} ${dueTimeFormatted}</p>
+          <p><strong>Card:</strong> ${card.title}</p>
+          <p><strong>Checklist:</strong> ${checklist.title}</p>
+          <p><strong>Item:</strong> ${item.title}</p>
+          <p>You have 12 hours left to complete this task!</p>
+          <p><a href="${WEBSITE_DOMAIN}/board/${card.boardId}/card/${card._id}">View card details</a></p>
+        `
+      } else if (status === 'overdue') {
+        subject = `🚨 Alert: ${title} - OVERDUE`
+        htmlContent = `
+          <h2>🚨 Overdue alert! - Checklist Item</h2>
+          <p><strong>${title}</strong></p>
+          <p><strong>Deadline:</strong> ${dueDateFormatted} ${dueTimeFormatted}</p>
+          <p><strong>Card:</strong> ${card.title}</p>
+          <p><strong>Checklist:</strong> ${checklist.title}</p>
+          <p><strong>Item:</strong> ${item.title}</p>
+          <p style="color: red;">⚠️ This task is overdue. Please handle it immediately!</p>
+          <p><a href="${WEBSITE_DOMAIN}/board/${card.boardId}/card/${card._id}">View card details</a></p>
+        `
+      }
+
+      await BrevoProvider.sendEmail(user.email, subject, htmlContent)
+      console.log(`📧 Checklist item email sent to: ${user.email}`)
+    }
+  } catch (error) {
+    console.error('Error sending checklist item notification emails:', error)
+  }
+}
+
+const sendChecklistItemNotificationInApp = async (userIds, card, checklist, item, status) => {
+  try {
+    const board = await boardModel.findOneById(card.boardId)
+    for (const userId of userIds) {
+      const user = await userModel.findOneById(userId)
+      if (!user) continue
+
+      if (status === 'upcoming_12h') {
+        await notificationService.createNew({
+          userId: userId.toString(),
+          type: 'reminderDueDateInChecklistItem',
+          details: {
+            boardId: card.boardId.toString(),
+            boardTitle: board.title,
+            cardId: card._id.toString(),
+            cardTitle: card.title,
+            checklistTitle: checklist.title,
+            checklistItemTitle: item.title
+          }
+        })
+        emitBatchEvent(userId)
+      } else if (status === 'overdue') {
+        await notificationService.createNew({
+          userId: userId.toString(),
+          type: 'alertOverDueDateInChecklistItem',
+          details: {
+            boardId: card.boardId.toString(),
+            boardTitle: board.title,
+            cardId: card._id.toString(),
+            cardTitle: card.title,
+            checklistTitle: checklist.title,
+            checklistItemTitle: item.title
+          }
+        })
+        emitBatchEvent(userId)
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error sending checklist item notification in app:', error)
+  }
+}
+
 
 const sendNotificationInApp = async (userIds, card, status) => {
   try {
@@ -303,7 +516,7 @@ const sendNotificationEmails = async (userIds, title, card, dueDate, dueDateTime
           <p><strong>Due date:</strong> ${dueDateFormatted} ${dueTimeFormatted}</p>
           <p><strong>Card:</strong> ${card.title}</p>
           <p>You have 12 hours to complete this task!</p>
-          <p><a href="${env.WEBSITE_DOMAIN_DEV}/board/${card.boardId}/card/${card._id}">View card details</a></p>
+          <p><a href="${WEBSITE_DOMAIN}/board/${card.boardId}/card/${card._id}">View card details</a></p>
         `
       } else if (status === 'overdue') {
         subject = `🚨 Alert: ${title} - OVERDUE`
@@ -313,7 +526,7 @@ const sendNotificationEmails = async (userIds, title, card, dueDate, dueDateTime
           <p><strong>Due date:</strong> ${dueDateFormatted} ${dueTimeFormatted}</p>
           <p><strong>Card:</strong> ${card.title}</p>
           <p style="color: red;">⚠️ This task is overdue. Please handle it immediately!</p>
-          <p><a href="${env.WEBSITE_DOMAIN_DEV}/board/${card.boardId}/card/${card._id}">View card details</a></p>
+          <p><a href="${WEBSITE_DOMAIN}/board/${card.boardId}/card/${card._id}">View card details</a></p>
         `
       }
 
@@ -329,11 +542,17 @@ const sendNotificationEmails = async (userIds, title, card, dueDate, dueDateTime
 const checkAllDueDates = async () => {
   try {
     // Lấy tất cả card due date flags
-    const cardFlags = await GET_DB().collection(cardDueDateFlagModel.CARD_DUE_DATE_FLAG_COLLECTION_NAME).find({}).toArray()
+    const cardFlags = await GET_DB().collection('cardDueDateFlags').find({}).toArray()
 
+    console.log('🔍 Card flags:', cardFlags)
     for (const flag of cardFlags) {
-      // Check card due date từ flag
-      await sendDueDateNotification(flag.cardId, 'card')
+      if (flag.type === 'card') {
+        // Check card due date từ flag
+        await sendDueDateNotification(flag.cardId, 'card')
+      } else if (flag.type === 'checklistItem') {
+        // Check checklist item due date từ flag
+        await sendDueDateNotification(flag.cardId, 'checklistItem', flag.checklistId, flag.itemId)
+      }
     }
   } catch (error) {
     console.error('Error checking all due dates:', error)

@@ -276,6 +276,30 @@ const update = async (userId, cardId, updateData) => {
       })
     }
 
+    if (updateData.isCompleted) {
+      activityService.createActivity({
+        userId,
+        type: 'completeCard',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+
+    if (updateData.isCompleted === false) {
+      activityService.createActivity({
+        userId,
+        type: 'uncompleteCard',
+        cardId: cardId,
+        boardId: result.boardId.toString(),
+        data: {
+          cardTitle: result.title
+        }
+      })
+    }
+
     return result
   } catch (error) {
     throw new Error(error)

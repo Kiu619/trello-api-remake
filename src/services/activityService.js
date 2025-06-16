@@ -36,10 +36,20 @@ const getActivitiesByCardId = async (cardId) => {
     throw new Error(error)
   }
 }
+
+const getUserActivitiesInCard = async (userId, cardId) => {
+  try {
+    const activities = await activityModel.getUserActivitiesInCard(userId, cardId)
+    return activities
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const activityService = {
   createActivity,
   getActivitiesByBoardId,
   getActivitiesByUserId,
-  getActivitiesByCardId
-  // Thêm các hàm tiện ích khác khi cần
+  getActivitiesByCardId,
+  getUserActivitiesInCard
 }

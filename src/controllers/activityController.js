@@ -32,8 +32,19 @@ const getActivitiesByCardId = async (req, res, next) => {
   }
 }
 
+const getUserActivitiesInCard = async (req, res, next) => {
+  try {
+    const cardId = req.query.cardId
+    const userId = req.query.userId
+    const activities = await activityService.getUserActivitiesInCard(userId, cardId)
+    res.status(StatusCodes.OK).json(activities)
+  } catch (error) {
+    next(error)
+  }
+}
 export const activityController = {
   getActivitiesByBoardId,
   getActivitiesByUserId,
-  getActivitiesByCardId
+  getActivitiesByCardId,
+  getUserActivitiesInCard
 }

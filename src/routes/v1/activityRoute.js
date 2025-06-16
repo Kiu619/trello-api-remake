@@ -12,4 +12,7 @@ Router.route('/user')
 Router.route('/card/:cardId')
   .get(activityController.getActivitiesByCardId)
 
+Router.route('/user/card')
+  .get(activityController.getUserActivitiesInCard)
+
 export const activityRoutes = Router

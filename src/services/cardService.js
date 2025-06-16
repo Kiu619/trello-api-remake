@@ -9,6 +9,7 @@ import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
 import { slugify } from '~/utils/formatter'
 import { activityService } from './activityService'
 import { ObjectId } from 'mongodb'
+import { WEBSITE_DOMAIN } from '~/utils/constants'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -185,7 +186,7 @@ const addNewComment = async (userId, card, cardId, updateData, userInfo) => {
         const htmlContent = `
           <h2>You were tagged by ${userInfo.email} in a comment in Card: ${card.title} in Board: ${board.title}</h2>
           <p>Comment: ${newComment.content}</p>
-          <p>Click <a href="${env.WEBSITE_DOMAIN_DEV}/board/${boardId}/card/${cardId}">here</a> to view</p>
+          <p>Click <a href="${WEBSITE_DOMAIN}/board/${boardId}/card/${cardId}">here</a> to view</p>
         `
         await BrevoProvider.sendEmail(taggedUserInfo.email, customSubject, htmlContent)
       }
@@ -234,7 +235,7 @@ const updateComment = async (userId, card, cardId, commentToUpdate, userInfo) =>
           const htmlContent = `
         <h2>You were tagged by ${userInfo.email} in a comment in Card: ${card.title} in Board: ${board.title}</h2>
         <p>Comment: ${updateCommentData.content}</p>
-        <p>Click <a href="${env.WEBSITE_DOMAIN_DEV}/board/${boardId}/card/${cardId}">here</a> to view</p>
+        <p>Click <a href="${WEBSITE_DOMAIN}/board/${boardId}/card/${cardId}">here</a> to view</p>
       `
           await BrevoProvider.sendEmail(taggedUserInfo.email, customSubject, htmlContent)
         }
