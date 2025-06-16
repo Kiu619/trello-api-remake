@@ -68,6 +68,18 @@ const forgotPassword = async (req, res, next) => {
   }
 }
 
+const verify2FAEmail = async (req, res, next) => {
+  const correctCondition = Joi.object({
+    otpCode: Joi.string().required().min(6).max(6).message('OTP code phải có 6 chữ số')
+  })
+  try {
+    await correctCondition.validateAsync(req.body, { abortEarly: false })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, new Error(error).message))
+  }
+}
+
 export const userValidation = {
-  createNew, verifyAccount, login, update, forgotPassword
+  createNew, verifyAccount, login, update, forgotPassword, verify2FAEmail
 }

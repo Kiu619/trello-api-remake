@@ -152,9 +152,31 @@ const getUsers = async (req, res, next) => {
   }
 }
 
+const send2FAEmailOTP = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const result = await userService.send2FAEmailOTP(userId)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const verify2FAEmail = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const otpCode = req.body.otpCode
+    const device_id = req.headers['user-agent']
+    const result = await userService.verify2FAEmail(userId, otpCode, device_id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const userController = {
   createNew, login, verifyAccount,
   logout, refreshToken, update, forgotPassword,
   get2FAQRCode, setup2FA, verify2FA, disable2FA,
-  getUsers
+  getUsers, send2FAEmailOTP, verify2FAEmail
 }

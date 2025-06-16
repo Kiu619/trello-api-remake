@@ -22,9 +22,8 @@ const SESSIONS_SCHEMA = Joi.object({
 // Define Collection (name & schema)
 export const USER_COLLECTION_NAME = 'users'
 const USER_COLLECTION_SCHEMA = Joi.object({
-  email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE), // unique
+  email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE),
   password: Joi.string().required(),
-  // username cắt ra từ email sẽ có khả năng không unique bởi vì sẽ có những tên email trùng nhau nhưng từ các nhà cung cấp khác nhau
   username: Joi.string().required().trim().strict(),
   displayName: Joi.string().required().trim().strict(),
   avatar: Joi.string().default(null),
@@ -33,6 +32,12 @@ const USER_COLLECTION_SCHEMA = Joi.object({
   isActive: Joi.boolean().default(false),
   verifyToken: Joi.string(),
   isRequire2fa: Joi.boolean().default(false),
+  preferred2faMethod: Joi.string().valid('totp', 'email').default('totp'),
+  emailOTP: Joi.object({
+    code: Joi.string(),
+    expiresAt: Joi.date().timestamp('javascript'),
+    attempts: Joi.number().default(0)
+  }).default(null),
 
   starredBoardIds: Joi.array().items(
     Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
@@ -299,6 +304,78 @@ const disconnectGoogleDrive = async (userId) => {
   }
 }
 
+// Thêm function để tạo và lưu OTP email
+const generateEmailOTP = async (userId) => {
+  try {
+    const user = await findOneById(userId)
+    if (!user) {
+      throw new Error('User not found')
+    }
+
+    // Tạo OTP 6 chữ số
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiresAt = Date.now() + (5 * 60 * 1000) // Hết hạn sau 5 phút
+
+    const emailOTP = {
+      code: otpCode,
+      expiresAt: expiresAt,
+      attempts: 0
+    }
+
+    await update(userId, { emailOTP })
+    return otpCode
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Function để verify OTP email
+const verifyEmailOTP = async (userId, otpCode) => {
+  try {
+    const user = await findOneById(userId)
+    if (!user) {
+      throw new Error('User not found')
+    }
+
+    if (!user.emailOTP || !user.emailOTP.code) {
+      throw new Error('No OTP found')
+    }
+
+    // Kiểm tra số lần thử
+    if (user.emailOTP.attempts >= 3) {
+      throw new Error('Too many attempts')
+    }
+
+    // Kiểm tra thời gian hết hạn
+    if (Date.now() > user.emailOTP.expiresAt) {
+      throw new Error('OTP expired')
+    }
+
+    // Kiểm tra mã OTP
+    if (user.emailOTP.code !== otpCode) {
+      // Tăng số lần thử
+      await update(userId, { 
+        'emailOTP.attempts': user.emailOTP.attempts + 1 
+      })
+      throw new Error('Invalid OTP')
+    }
+
+    // Xóa OTP sau khi verify thành công
+    await update(userId, { emailOTP: null })
+    return true
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Function để xóa OTP email
+const clearEmailOTP = async (userId) => {
+  try {
+    await update(userId, { emailOTP: null })
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 
 export const userModel = {
   USER_ROLES,
@@ -311,5 +388,8 @@ export const userModel = {
   insertSession, updateSession, getUsers,
   saveGoogleDriveTokens,
   getGoogleDriveTokens,
-  disconnectGoogleDrive
+  disconnectGoogleDrive,
+  generateEmailOTP,
+  verifyEmailOTP,
+  clearEmailOTP
 }

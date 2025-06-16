@@ -48,5 +48,10 @@ Router.route('/verify_2fa')
 Router.route('/disable_2fa')
   .put(authMiddleware.isAuthorized, userController.disable2FA)
 
+Router.route('/send_2fa_email_otp')
+  .post(authMiddleware.isAuthorized, userController.send2FAEmailOTP)
+
+Router.route('/verify_2fa_email')
+  .put(authMiddleware.isAuthorized, userValidation.verify2FAEmail, userController.verify2FAEmail)
 
 export const userRoutes = Router

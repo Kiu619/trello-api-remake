@@ -386,8 +386,78 @@ const getUsers = async (queryFilter) => {
   }
 }
 
+const send2FAEmailOTP = async (userId) => {
+  try {
+    const user = await userModel.findOneById(userId)
+    if (!user) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
+    }
+
+    if (!user.isRequire2fa) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, '2FA is not enabled')
+    }
+
+    // Generate email OTP
+    const otpCode = await userModel.generateEmailOTP(userId)
+
+    // Send email
+    const customSubject = 'Your 2FA verification code'
+    const htmlContent = `
+      <h1>2FA Verification Code</h1>
+      <p>Your OTP is: <strong>${otpCode}</strong></p>
+      <p>This code will expire in 5 minutes.</p>
+      <p>If you did not request this code, please disregard this email.</p>
+    `
+
+    await BrevoProvider.sendEmail(user.email, customSubject, htmlContent)
+
+    return { message: 'A verification code has been sent to your email' }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const verify2FAEmail = async (userId, otpCode, device_id) => {
+  try {
+    const user = await userModel.findOneById(userId)
+    if (!user) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
+    }
+
+    if (!user.isRequire2fa) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, '2FA is not enabled')
+    }
+
+    // Verify OTP email
+    await userModel.verifyEmailOTP(userId, otpCode)
+
+    // Cập nhật user
+    let updatedUser = pickUser(user)
+    updatedUser = { ...updatedUser, is_2fa_verified: true }
+
+    // Cập nhật session
+    await userModel.updateSession(userId, device_id, { is_2fa_verified: true })
+    return updatedUser
+  } catch (error) {
+    if (error.message === 'Too many attempts') {
+      throw new ApiError(StatusCodes.TOO_MANY_REQUESTS, 'Too many attempts. Please request a new OTP.')
+    }
+    if (error.message === 'OTP expired') {
+      throw new ApiError(StatusCodes.UNAUTHORIZED, 'OTP has expired. Please request a new OTP.')
+    }
+    if (error.message === 'Invalid OTP') {
+      throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid OTP. Please request a new OTP.')
+    }
+    if (error.message === 'No OTP found') {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'No OTP found. Please request a new OTP.')
+    }
+    throw new Error(error)
+  }
+}
+
 export const userService = {
   createNew, verifyAccount, login,
   logout, refreshToken, update, forgotPassword,
-  get2FAQRCode, setup2FA, verify2FA, disable2FA, getUsers
+  get2FAQRCode, setup2FA, verify2FA, disable2FA, getUsers,
+  send2FAEmailOTP, verify2FAEmail
 }
