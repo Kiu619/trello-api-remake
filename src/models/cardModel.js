@@ -52,7 +52,7 @@ const CARD_COLLECTION_SCHEMA = Joi.object({
   comments: Joi.array().items(COMMENT_SCHEMA).default([]),
   checklists: Joi.array().items(CHECKLIST_SCHEMA).default([]),
   location: Joi.object().default({}),
-
+  isCompleted: Joi.boolean().default(false),
   isClosed: Joi.boolean().default(false),
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
@@ -121,15 +121,6 @@ const findOneByTitle = async (columnId, cardTitle) => {
   try {
     const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ columnId: new ObjectId(columnId), title: cardTitle })
     return card
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
-const getPositionInColumn = async (cardId, columnId) => {
-  try {
-    const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId), columnId: new ObjectId(columnId) })
-    return card.positionInColumn
   } catch (error) {
     throw new Error(error)
   }

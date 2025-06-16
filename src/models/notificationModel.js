@@ -76,6 +76,17 @@ const DUEDATE_IN_CARD_NOTIFICATION_SCHEMA = Joi.object({
   senderName: Joi.string().required()
 })
 
+const DUEDATE_IN_CHECKLIST_ITEM_NOTIFICATION_SCHEMA = Joi.object({
+  boardId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
+  boardTitle: Joi.string().required(),
+  cardId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
+  cardTitle: Joi.string().required(),
+  checklistTitle: Joi.string().required(),
+  checklistItemTitle: Joi.string(),
+  senderId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
+  senderName: Joi.string().required()
+})
+
 const NOTIFICATION_SCHEMAS = {
   inviteUserToBoard: INVITE_NOTIFICATION_SCHEMA,
   mention: MENTION_NOTIFICATION_SCHEMA,
@@ -84,7 +95,8 @@ const NOTIFICATION_SCHEMAS = {
   activity: ACTIVITY_NOTIFICATION_SCHEMA,
   requestToJoinBoard: REQUEST_TO_JOIN_BOARD_NOTIFICATION_SCHEMA,
   acceptedRequestToJoinBoard: ACCEPTED_REQUEST_TO_JOIN_BOARD_NOTIFICATION_SCHEMA,
-  dueDateInCard: DUEDATE_IN_CARD_NOTIFICATION_SCHEMA
+  dueDateInCard: DUEDATE_IN_CARD_NOTIFICATION_SCHEMA,
+  dueDateInChecklistItem: DUEDATE_IN_CHECKLIST_ITEM_NOTIFICATION_SCHEMA
 }
 
 export const NOTIFICATION_COLLECTION_NAME = 'notifications'

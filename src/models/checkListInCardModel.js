@@ -11,7 +11,9 @@ export const CHECKLIST_ITEM_SCHEMA = Joi.object({
   _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
   title: Joi.string().required(),
   isChecked: Joi.boolean().default(false),
-  assignedTo: Joi.array().items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)).default([])
+  assignedTo: Joi.array().items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)).default([]),
+  dueDate: Joi.date().allow(null),
+  dueDateTime: Joi.string().allow('', null)
 })
 
 export const CHECKLIST_SCHEMA = Joi.object({
@@ -128,7 +130,7 @@ const addChecklistItem = async (userId, cardId, item) => {
     const checklistId = item.checklistId
     const card = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
     const checklist = getChecklistById(card, checklistId)
-    const itemWithId = { title, _id: itemId, isChecked: false, assignedTo: [] }
+    const itemWithId = { title, _id: itemId, isChecked: false, assignedTo: [], dueDate: null, dueDateTime: null }
 
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId), 'checklists._id': new ObjectId(checklistId) },
@@ -164,7 +166,9 @@ const updateChecklistItem = async (userId, cardId, item) => {
     const title = item.title
     const isChecked = item.isChecked
     const assignedTo = item.assignedTo
-    const updatedItem = { title, _id: new ObjectId(itemId), isChecked, assignedTo }
+    const dueDate = item.dueDate
+    const dueDateTime = item.dueDateTime
+    const updatedItem = { title, _id: new ObjectId(itemId), isChecked, assignedTo, dueDate, dueDateTime }
 
     // // Nếu có trường assignMember = true thì gửi email thông báo (viết code chán thật sự, thật ra phải viết ở service)
     if (item.assignMember) {
@@ -189,6 +193,38 @@ const updateChecklistItem = async (userId, cardId, item) => {
         returnDocument: 'after'
       }
     )
+
+    // Tạo activity cho due date nếu có thay đổi
+    // if (item.dueDate !== undefined) {
+    //   if (!item.dueDate || item.dueDate === null) {
+    //     await activityService.createActivity({
+    //       userId,
+    //       type: 'removeChecklistItemDueDate',
+    //       cardId: cardId,
+    //       boardId: result.boardId.toString(),
+    //       data: {
+    //         cardTitle: result.title,
+    //         checklistTitle: checklist.title,
+    //         checklistItemTitle: title
+    //       }
+    //     })
+    //   } else {
+    //     await activityService.createActivity({
+    //       userId,
+    //       type: 'setChecklistItemDueDate',
+    //       cardId: cardId,
+    //       boardId: result.boardId.toString(),
+    //       data: {
+    //         cardTitle: result.title,
+    //         checklistTitle: checklist.title,
+    //         checklistItemTitle: title,
+    //         dueDate: item.dueDate,
+    //         dueDateTime: item.dueDateTime || '',
+    //         dueDateTitle: item.dueDateTitle || ''
+    //       }
+    //     })
+    //   }
+    // }
 
     await activityService.createActivity({
       userId,
