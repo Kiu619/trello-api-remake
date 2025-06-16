@@ -10,7 +10,19 @@ export const DUEDATE_SCHEMA = Joi.object({
   dueDateTime: Joi.date().timestamp('javascript').default(null), // New field for due date time
   startDate: Joi.date().timestamp('javascript').default(null), // New field for start date
   startDateTime: Joi.date().timestamp('javascript').default(null), // New field for start date time
-  isComplete: Joi.boolean().default(false) // New field for completion status
+  isComplete: Joi.boolean().default(false), // New field for completion status
+  // Thêm các trường notification status
+  notifications: Joi.object({
+    reminder24h: Joi.boolean().default(false),
+    reminder1h: Joi.boolean().default(false),
+    overdue: Joi.boolean().default(false),
+    lastNotified: Joi.date().timestamp('javascript').default(null)
+  }).default({
+    reminder24h: false,
+    reminder1h: false,
+    overdue: false,
+    lastNotified: null
+  })
 })
 
 const setDueDate = async (cardId, dueDateData) => {

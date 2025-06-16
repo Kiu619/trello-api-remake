@@ -17,7 +17,8 @@ import { batchSocket } from './sockets/batchSocket'
 import { copyCardInSameBoardSocket } from './sockets/copyCardInSameBoardSocket'
 import { fetchNotificationsSocket } from './sockets/fetchNotificationsSocket'
 import { setupSocketIo } from './services/chatBotService'
-
+import { startDueDateChecker } from '~/jobs/dueDateChecker'
+import { setupNotificationSocket } from './services/notificationService'
 
 const START_SERVER = () => {
   const app = express()
@@ -50,6 +51,7 @@ const START_SERVER = () => {
 
   // Truyền instance socket.io vào chatBotService
   setupSocketIo(io)
+  setupNotificationSocket(io)
 
   io.on('connection', (socket) => {
     fetchNotificationsSocket(socket)
@@ -75,6 +77,9 @@ const START_SERVER = () => {
   exitHook(() => {
     CLOSE_DB()
   })
+
+  // Start cron jobs
+  startDueDateChecker()
 }
 
 CONNECT_DB()

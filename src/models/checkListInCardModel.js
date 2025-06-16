@@ -6,6 +6,8 @@ import { CARD_COLLECTION_NAME } from '~/models/cardModel'
 import { BrevoProvider } from '~/providers/BrevoProvider'
 import { env } from '~/config/environment'
 import { activityService } from '~/services/activityService'
+import { notificationService } from '~/services/notificationService'
+import { cardDueDateFlagModel } from './cardDueDateFlag'
 
 export const CHECKLIST_ITEM_SCHEMA = Joi.object({
   _id: Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -182,6 +184,10 @@ const updateChecklistItem = async (userId, cardId, item) => {
       await BrevoProvider.sendEmail(item.assignMember.email, customSubject, htmlContent)
     }
 
+    if (item.dueDate) {
+      await cardDueDateFlagModel.createCardDueDateFlag(cardId, 'checklistItem')
+    }
+
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId), 'checklists._id': new ObjectId(checklistId), 'checklists.items._id': new ObjectId(itemId) },
       { $set: { 'checklists.$[checklist].items.$[item]': updatedItem } },
@@ -193,6 +199,8 @@ const updateChecklistItem = async (userId, cardId, item) => {
         returnDocument: 'after'
       }
     )
+
+
 
     // Tạo activity cho due date nếu có thay đổi
     // if (item.dueDate !== undefined) {
@@ -243,7 +251,6 @@ const updateChecklistItem = async (userId, cardId, item) => {
     throw new Error(error)
   }
 }
-
 
 const deleteChecklistItem = async (userId, cardId, item) => {
   try {

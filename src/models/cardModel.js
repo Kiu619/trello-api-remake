@@ -10,6 +10,8 @@ import { COLUMN_COLLECTION_NAME } from './columnModel'
 import { DUEDATE_SCHEMA } from './dueDateModel'
 import { activityService } from '~/services/activityService'
 import { labelModel } from './labelModel'
+import { cardDueDateFlagModel } from './cardDueDateFlag'
+
 // Define Comment Schema
 const COMMENT_SCHEMA = Joi.object({
   userId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
@@ -188,7 +190,7 @@ const update = async (userId, cardId, updateData) => {
         cardId: cardId,
         boardId: result.boardId.toString(),
         data: {
-          cardTitle: result.title,
+          cardTitle: result.title
         }
       })
     }
@@ -204,6 +206,9 @@ const update = async (userId, cardId, updateData) => {
             cardTitle: result.title
           }
         })
+
+        // Xóa flag due date
+        await cardDueDateFlagModel.deleteCardDueDateFlag(cardId)
       } else {
         activityService.createActivity({
           userId,
@@ -216,6 +221,9 @@ const update = async (userId, cardId, updateData) => {
             dueDateTime: updateData.dueDate.dueDateTime
           }
         })
+
+        // Tạo flag due date
+        await cardDueDateFlagModel.createCardDueDateFlag(cardId, 'card')
       }
     }
 
@@ -267,8 +275,6 @@ const update = async (userId, cardId, updateData) => {
         }
       })
     }
-
-
 
     return result
   } catch (error) {
@@ -549,7 +555,7 @@ const moveCardToDifferentBoard = async (userId, cardId, currentBoardId, currentC
           }
           return null
         }))
-        
+
         // Lọc bỏ các giá trị null
         updatedLabelIds = newLabels.filter(labelId => labelId !== null)
       } else {
@@ -804,6 +810,8 @@ const copyCard = async (userId, cardId, currentBoardId, currentColumnId, newBoar
 const deleteCardById = async (cardId) => {
   try {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteOne({ _id: new ObjectId(cardId) })
+    // Xóa flag due date
+    await cardDueDateFlagModel.deleteCardDueDateFlag(cardId)
     return result
   } catch (error) {
     throw new Error(error)
